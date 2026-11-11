@@ -1,0 +1,21 @@
+'use strict';
+/* Small state-changing commands shared by buttons, shortcuts and sliders. */
+
+function toggleGrid() { S.grid.visible = !S.grid.visible; refresh('grid'); }
+function toggleBypass() { S.lens.bypass = !S.lens.bypass; refresh('gl'); }
+function resetLens() { Object.assign(S.lens, defaultLens()); refresh('gl'); }
+function resetImageTransform() { Object.assign(S.img, defaultImageTransform()); refresh('gl'); }
+
+function centerImage() {
+  const I = S.img; if (!I.el) return;
+  I.x = (S.doc.w - I.w * I.scale) / 2; I.y = (S.doc.h - I.h * I.scale) / 2; refresh('gl');
+}
+function fitImageToCanvas() {
+  const I = S.img; if (!I.el) return;
+  I.scale = Math.min(S.doc.w / I.w, S.doc.h / I.h); centerImage();
+}
+function nudgeImage(dx, dy) { if (!S.img.el) return; S.img.x += dx; S.img.y += dy; refresh('gl'); }
+
+/** Shortcut helpers for the two most-used grid settings. */
+function nudgeGridSize(d) { S.grid.size = Math.max(1, S.grid.size + d); refresh('grid'); }
+function nudgeGridSpacing(d) { const g = S.grid; g.gapX = g.gapY = Math.max(0, g.gapX + d); refresh('grid'); }
