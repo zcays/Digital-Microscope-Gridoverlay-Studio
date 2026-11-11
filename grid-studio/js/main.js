@@ -11,7 +11,9 @@ function frame() {
   if (f.status) {
     $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px`;
     $('#sZoom').textContent = Math.round(S.zoom * 100) + '%';
-    $('#sPos').textContent = S.cursor ? `x ${Math.round(S.cursor.x)}  y ${Math.round(S.cursor.y)}` : '';
+    const k = pxPerUm(), c = S.cursor;
+    $('#sPos').textContent = !c ? '' : k ? `x ${Math.round(c.x / k)} µm  y ${Math.round(c.y / k)} µm` : `x ${Math.round(c.x)}  y ${Math.round(c.y)}`;
+    updateScaleBar(k);
     updateChipInfo();
     f.status = false;
   }
@@ -53,3 +55,12 @@ function init() {
   dirty('gl', 'grid', 'crop', 'status');
 }
 init();
+
+/** Ruler in real µm (only while a chip version is ticked): lets you check well size and spacing against the table. */
+function updateScaleBar(k) {
+  const bar = $('#scalebar');
+  bar.style.display = k ? 'block' : 'none'; if (!k) return;
+  const um = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].find(u => u * k * S.zoom >= 70) || 10000;
+  bar.firstElementChild.style.width = um * k * S.zoom + 'px';
+  bar.lastElementChild.textContent = um >= 1000 ? um / 1000 + ' mm' : um + ' µm';
+}
