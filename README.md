@@ -41,6 +41,7 @@ If the page is blank, check that WebGL is enabled in your browser settings.
 
 ## Features
 
+- **Chip versions:** tick one of V1-Square, V3.1, V3.2, V7.0, V9.0–V9.2, V10.2, V11, V12, V15.1, V15.2 and the grid takes that chip's well shape (square or circle), well size and pitch from the geometry table, true to scale, filling the whole canvas. Adjust the image (move / scale / rotate) until it lines up; the app shows the image's µm per pixel. Optional "real array only" view shows just the N × M wells.
 - Grid overlay: square size, horizontal / vertical / combined spacing, dead-space margins, columns/rows, colour, opacity, outline or filled
 - Fisheye (barrel / pincushion) correction with lens centre, plus before/after toggle
 - Move, scale and rotate the image; arrow-key nudging
@@ -51,4 +52,4 @@ If the page is blank, check that WebGL is enabled in your browser settings.
 ## Project layout
 
 `grid-studio/index.html` is the page, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern
-(state, gl, grid, crop, controls, input, main). Scripts are plain `<script>` tags loaded in order, which is why the app also works from disk.
+(state, presets, gl, grid, crop, controls, input, main). Chip data lives in `grid-studio/js/presets.js`. Scripts are plain `<script>` tags loaded in order, which is why the app also works from disk.

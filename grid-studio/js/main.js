@@ -12,6 +12,7 @@ function frame() {
     $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px`;
     $('#sZoom').textContent = Math.round(S.zoom * 100) + '%';
     $('#sPos').textContent = S.cursor ? `x ${Math.round(S.cursor.x)}  y ${Math.round(S.cursor.y)}` : '';
+    updateChipInfo();
     f.status = false;
   }
 }
@@ -41,6 +42,7 @@ function wireTopBar() {
   dom.ws.addEventListener('drop', e => { e.preventDefault(); loadFile(e.dataTransfer.files[0]); });
   addEventListener('paste', e => { const f = e.clipboardData && e.clipboardData.files[0]; if (f) loadFile(f); });
   addEventListener('resize', () => { if (!S.img.el) fitZoom(); });
+  addEventListener('load', () => { if (!S.img.el) fitZoom(); });
 }
 
 function init() {

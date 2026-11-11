@@ -3,20 +3,37 @@
 
 const MAX_CELLS = 400000;
 
-/** Work out where the array starts and how many whole squares fit inside the dead-space margins. */
-function gridLayout(w, h) {
-  const G = S.grid, size = Math.max(1, G.size);
-  const pitchX = size + G.gapX, pitchY = size + G.gapY;
-  if (pitchX < 1 || pitchY < 1) return null;
+/** Index range of cells (origin + i*pitch) that touch [0, total]; cells cut by the edge are included. */
+const tileRange = (origin, size, pitch, total) => [Math.floor((-size - origin) / pitch) + 1, Math.ceil((total - origin) / pitch)];
 
+/** Describe the grid to draw: cell shape/size/pitch, first cell position and the index ranges. */
+function gridLayout(w, h) {
+  const G = S.grid, P = activePreset();
+
+  if (P) {                                   // chip version: true-to-scale, fills the whole plane
+    const k = pxPerUm(), size = P.well * k, pitch = P.pitch * k;
+    if (size < .5 || pitch < 1) return null;
+    const L = {shape: P.shape, size, pitchX: pitch, pitchY: pitch};
+    if (S.chip.arrayOnly) {                  // just the real N × M array, centred
+      Object.assign(L, {i0: 0, i1: P.wide, j0: 0, j1: P.long});
+      L.x0 = (w - (P.wide * pitch - (pitch - size))) / 2 + G.offX;
+      L.y0 = (h - (P.long * pitch - (pitch - size))) / 2 + G.offY;
+    } else {
+      L.x0 = G.offX; L.y0 = G.offY;
+      [L.i0, L.i1] = tileRange(L.x0, size, pitch, w); [L.j0, L.j1] = tileRange(L.y0, size, pitch, h);
+    }
+    return L;
+  }
+
+  const size = Math.max(1, G.size), pitchX = size + G.gapX, pitchY = size + G.gapY;   // manual grid
+  if (pitchX < 1 || pitchY < 1) return null;
   const count = (avail, pitch, gap, fixed) => fixed > 0 ? fixed : Math.max(0, Math.floor((avail + gap) / pitch));
   const availW = w - G.mL - G.mR, availH = h - G.mT - G.mB;
   const cols = count(availW, pitchX, G.gapX, G.cols), rows = count(availH, pitchY, G.gapY, G.rows);
   if (cols < 1 || rows < 1) return null;
-
   const spareX = availW - (cols * pitchX - G.gapX), spareY = availH - (rows * pitchY - G.gapY);
   return {
-    size, pitchX, pitchY, cols, rows,
+    shape: G.shape, size, pitchX, pitchY, i0: 0, i1: cols, j0: 0, j1: rows,
     x0: G.mL + (G.center ? spareX / 2 : 0) + G.offX,
     y0: G.mT + (G.center ? spareY / 2 : 0) + G.offY,
   };
@@ -27,16 +44,18 @@ function drawGrid(ctx, w, h, k) {
   ctx.clearRect(0, 0, w * k, h * k);
   const G = S.grid; if (!G.visible) return;
   const L = gridLayout(w, h); if (!L) return;
-  if (L.cols * L.rows > MAX_CELLS) return toast('Too many cells — increase the size or spacing');
+  if ((L.i1 - L.i0) * (L.j1 - L.j0) > MAX_CELLS) return toast('Too many cells — zoom the grid in or raise the size');
 
-  const filled = G.mode === 'filled';
+  const filled = G.mode === 'filled', circle = L.shape === 'circle';
   const lineW = filled ? 0 : Math.min(G.stroke, L.size / 2), inset = lineW / 2, side = L.size - lineW;
-  const radius = Math.min(G.radius, side / 2), rounded = radius > 0 && typeof ctx.roundRect === 'function';
+  const radius = Math.min(G.radius, side / 2), rounded = !circle && radius > 0 && typeof ctx.roundRect === 'function';
 
   ctx.save(); ctx.scale(k, k); ctx.globalAlpha = G.opacity; ctx.beginPath();
-  for (let j = 0; j < L.rows; j++) for (let i = 0; i < L.cols; i++) {
+  for (let j = L.j0; j < L.j1; j++) for (let i = L.i0; i < L.i1; i++) {
     const x = L.x0 + i * L.pitchX + inset, y = L.y0 + j * L.pitchY + inset;
-    if (rounded) ctx.roundRect(x, y, side, side, radius); else ctx.rect(x, y, side, side);
+    if (circle) { const r = side / 2; ctx.moveTo(x + side, y + r); ctx.arc(x + r, y + r, r, 0, Math.PI * 2); }
+    else if (rounded) ctx.roundRect(x, y, side, side, radius);
+    else ctx.rect(x, y, side, side);
   }
   if (filled) { ctx.fillStyle = G.color; ctx.fill(); }
   else { ctx.strokeStyle = G.color; ctx.lineWidth = lineW; ctx.stroke(); }

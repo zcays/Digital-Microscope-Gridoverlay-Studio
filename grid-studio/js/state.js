@@ -20,8 +20,9 @@ const S = {
     size: 12, gapX: 12, gapY: 12,
     mL: 40, mR: 40, mT: 40, mB: 40, center: true,   // dead space around the array
     offX: 0, offY: 0, cols: 0, rows: 0,              // 0 = as many as fit
-    radius: 0, stroke: 1,
+    radius: 0, stroke: 1, shape: 'square',
   },
+  chip: {id: null, zoom: 100, arrayOnly: false},     // ticked chip version (see presets.js)
   zoom: 1, tool: 'move', crop: null, ratio: 0, cursor: null,
 };
 const undoStack = [];                       // crop history: {doc, x, y}

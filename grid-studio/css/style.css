@@ -53,3 +53,9 @@ input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--edge);
 #help p{margin:3px 0} #help .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 kbd{background:#1e1e1e;border:1px solid var(--edge);border-radius:3px;padding:0 5px;font:11px ui-monospace,Menlo,monospace}
 .note{color:var(--dim);font-size:11px;margin-top:4px}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0 10px}
+.chip{display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--edge);border-radius:4px;cursor:pointer;background:#262626}
+.chip.on{border-color:var(--accent);background:#243447}
+.chip small{display:block;color:var(--dim);font-size:10px}
+.off{opacity:.4}
+.info{font-size:11px;line-height:1.5;margin-top:8px;padding:6px 8px;background:#222;border-radius:4px;user-select:text}

@@ -19,7 +19,8 @@ function setZoom(z) {
   requestAnimationFrame(() => { ws.scrollLeft = cx * S.zoom - ws.clientWidth / 2; ws.scrollTop = cy * S.zoom - ws.clientHeight / 2; });
 }
 function fitZoom() {
-  S.zoom = Math.min(4, (dom.ws.clientWidth - 90) / S.doc.w, (dom.ws.clientHeight - 90) / S.doc.h);
+  const fit = Math.min(4, (dom.ws.clientWidth - 90) / S.doc.w, (dom.ws.clientHeight - 90) / S.doc.h);
+  S.zoom = Math.max(ZOOM_MIN, fit);                       // layout may not be measurable yet (fit <= 0)
   dirty('layout', 'status');
 }
 const zoomIn = () => setZoom(S.zoom * 1.25), zoomOut = () => setZoom(S.zoom / 1.25);

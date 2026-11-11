@@ -7,7 +7,7 @@ const KEY_STEP = {
   'Square size': 1, 'Spacing (both)': 1, 'Spacing ↔ horiz.': 1, 'Spacing ↕ vert.': 1,
   'Dead space (all)': 5, 'Space left': 5, 'Space right': 5, 'Space top': 5, 'Space bottom': 5,
   'Offset X': 1, 'Offset Y': 1, 'Columns (0=auto)': 1, 'Rows (0=auto)': 1, 'Corner radius': 1, 'Line width': .5, 'Opacity %': 5,
-  'Strength': .01, 'Edge falloff': .01, 'Centre X %': 1, 'Centre Y %': 1,
+  'Grid zoom %': 5, 'Image µm/px': .05, 'Strength': .01, 'Edge falloff': .01, 'Centre X %': 1, 'Centre Y %': 1,
   'Position X': 1, 'Position Y': 1, 'Scale %': 1, 'Rotate °': .5, 'Width px': 10, 'Height px': 10,
 };
 const ARROW_DIR = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1};
@@ -67,20 +67,24 @@ function buildGridPanel() {
   line(p, 'Style', '<select id="gMode"><option value="outline">Outlined squares</option><option value="filled">Filled squares</option></select>');
   $('#gMode').onchange = e => { G.mode = e.target.value; dirty('grid'); };
 
-  slider(p, 'Square size', () => G.size, touch(v => G.size = Math.max(1, v)), 2, 200, 1);
-  slider(p, 'Spacing (both)', () => allEqual(G.gapX, G.gapY) ? G.gapX : lastSpacing, touch(v => G.gapX = G.gapY = lastSpacing = Math.max(0, v)), 0, 200, 1);
-  slider(p, 'Spacing ↔ horiz.', () => G.gapX, touch(v => G.gapX = Math.max(0, v)), 0, 200, 1);
-  slider(p, 'Spacing ↕ vert.', () => G.gapY, touch(v => G.gapY = Math.max(0, v)), 0, 200, 1);
-
-  slider(p, 'Dead space (all)', () => allEqual(G.mL, G.mR, G.mT, G.mB) ? G.mL : lastMargin, touch(v => G.mL = G.mR = G.mT = G.mB = lastMargin = Math.max(0, v)), 0, 400, 1);
+  // Manual sizing: switched off (greyed) while a chip version is ticked, because the chip dictates shape, size and spacing.
+  const m = document.createElement('div'); m.id = 'gridManual'; p.append(m);
+  line(m, 'Shape', '<select id="gShape"><option value="square">Squares</option><option value="circle">Circles</option></select>');
+  $('#gShape').onchange = e => { G.shape = e.target.value; dirty('grid'); };
+  slider(m, 'Square size', () => G.size, touch(v => G.size = Math.max(1, v)), 2, 200, 1);
+  slider(m, 'Spacing (both)', () => allEqual(G.gapX, G.gapY) ? G.gapX : lastSpacing, touch(v => G.gapX = G.gapY = lastSpacing = Math.max(0, v)), 0, 200, 1);
+  slider(m, 'Spacing ↔ horiz.', () => G.gapX, touch(v => G.gapX = Math.max(0, v)), 0, 200, 1);
+  slider(m, 'Spacing ↕ vert.', () => G.gapY, touch(v => G.gapY = Math.max(0, v)), 0, 200, 1);
+  slider(m, 'Dead space (all)', () => allEqual(G.mL, G.mR, G.mT, G.mB) ? G.mL : lastMargin, touch(v => G.mL = G.mR = G.mT = G.mB = lastMargin = Math.max(0, v)), 0, 400, 1);
   for (const [label, key] of [['Space left', 'mL'], ['Space right', 'mR'], ['Space top', 'mT'], ['Space bottom', 'mB']])
-    slider(p, label, () => G[key], touch(v => G[key] = Math.max(0, v)), 0, 400, 1);
-  checkbox(p, 'Centre array', () => G.center, v => { G.center = v; dirty('grid'); }, 'spread leftover room evenly on both ends');
+    slider(m, label, () => G[key], touch(v => G[key] = Math.max(0, v)), 0, 400, 1);
+  checkbox(m, 'Centre array', () => G.center, v => { G.center = v; dirty('grid'); }, 'spread leftover room evenly on both ends');
+  slider(m, 'Columns (0=auto)', () => G.cols, touch(v => G.cols = Math.max(0, Math.round(v))), 0, 100, 1);
+  slider(m, 'Rows (0=auto)', () => G.rows, touch(v => G.rows = Math.max(0, Math.round(v))), 0, 100, 1);
+  syncs.push(() => $('#gShape').value = G.shape);
 
-  slider(p, 'Offset X', () => G.offX, touch(v => G.offX = v), -200, 800, 1);
-  slider(p, 'Offset Y', () => G.offY, touch(v => G.offY = v), -200, 800, 1);
-  slider(p, 'Columns (0=auto)', () => G.cols, touch(v => G.cols = Math.max(0, Math.round(v))), 0, 100, 1);
-  slider(p, 'Rows (0=auto)', () => G.rows, touch(v => G.rows = Math.max(0, Math.round(v))), 0, 100, 1);
+  slider(p, 'Offset X', () => G.offX, touch(v => G.offX = v), -2000, 2000, 1);
+  slider(p, 'Offset Y', () => G.offY, touch(v => G.offY = v), -2000, 2000, 1);
   slider(p, 'Corner radius', () => G.radius, touch(v => G.radius = Math.max(0, v)), 0, 50, 1);
   slider(p, 'Line width', () => G.stroke, touch(v => G.stroke = Math.max(.25, v)), .5, 10, .25);
   slider(p, 'Opacity %', () => G.opacity * 100, touch(v => G.opacity = clamp(v, 0, 100) / 100), 0, 100, 1);
@@ -105,7 +109,7 @@ function buildLensPanel() {
 }
 
 function buildImagePanel() {
-  const p = $('#p-img'), I = S.img, touch = fn => v => { fn(v); dirty('gl'); };
+  const p = $('#p-img'), I = S.img, touch = fn => v => { fn(v); dirty('gl', 'status'); };
   slider(p, 'Position X', () => I.x, touch(v => I.x = v), -2000, 4000, 1);
   slider(p, 'Position Y', () => I.y, touch(v => I.y = v), -2000, 4000, 1);
   slider(p, 'Scale %', () => I.scale * 100, touch(v => I.scale = Math.max(1, v) / 100), 10, 400, .5);
@@ -130,4 +134,29 @@ function buildDocPanel() {
   slider(p, 'Height px', () => S.doc.h, touch(v => S.doc.h = clamp(Math.round(v), 16, MAX_DOC)), 100, 4000, 1);
 }
 
-function buildPanels() { buildGridPanel(); buildLensPanel(); buildImagePanel(); buildCropPanel(); buildDocPanel(); }
+function buildChipPanel() {
+  const p = $('#p-chip');
+  const list = document.createElement('div'); list.className = 'chips';
+  list.innerHTML = CHIPS.map(c => `<label class="chip"><input type="checkbox" data-id="${c.id}"><span><b>${c.id}</b><small>${c.shape} · pitch ${c.pitch} / well ${c.well} µm</small></span></label>`).join('');
+  p.append(list);
+  list.querySelectorAll('input').forEach(cb => cb.onchange = () => selectChip(cb.checked ? cb.dataset.id : null));   // ticking one unticks the others
+
+  const tools = document.createElement('div'); p.append(tools);
+  slider(tools, 'Grid zoom %', () => S.chip.zoom, v => setChipZoom(v), 10, 1000, 1);
+  slider(tools, 'Image µm/px', () => umPerPx() || 0, setImageUmPerPx, 0.1, 40, .01);
+  checkbox(tools, 'Real array only', () => S.chip.arrayOnly, v => { S.chip.arrayOnly = v; dirty('grid'); }, 'just the N × M wells, centred');
+  const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);
+  note(p, 'Tick a version: the grid takes its shape, well size and pitch from the table, true to scale, and fills the whole canvas. Then move / scale / rotate the image until it lines up with the wells — the µm/px readout is your image\'s calibration. Untick for the manual grid.');
+
+  syncs.push(() => {
+    list.querySelectorAll('.chip').forEach(l => { const cb = l.querySelector('input'), on = cb.dataset.id === S.chip.id; cb.checked = on; l.classList.toggle('on', on); });
+    tools.classList.toggle('off', !S.chip.id); tools.inert = !S.chip.id;
+    const manual = $('#gridManual'); manual.classList.toggle('off', !!S.chip.id); manual.inert = !!S.chip.id;
+    updateChipInfo();
+  });
+}
+
+function buildPanels() {
+  buildGridPanel(); buildChipPanel(); buildLensPanel(); buildImagePanel(); buildCropPanel(); buildDocPanel();
+  syncAll();
+}

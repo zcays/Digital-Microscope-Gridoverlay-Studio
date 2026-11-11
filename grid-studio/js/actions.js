@@ -17,5 +17,9 @@ function fitImageToCanvas() {
 function nudgeImage(dx, dy) { if (!S.img.el) return; S.img.x += dx; S.img.y += dy; refresh('gl'); }
 
 /** Shortcut helpers for the two most-used grid settings. */
-function nudgeGridSize(d) { S.grid.size = Math.max(1, S.grid.size + d); refresh('grid'); }
-function nudgeGridSpacing(d) { const g = S.grid; g.gapX = g.gapY = Math.max(0, g.gapX + d); refresh('grid'); }
+/** With a chip ticked, [ ] zoom the true-to-scale grid instead; spacing keys do nothing (spacing comes from the chip). */
+function nudgeGridSize(d) {
+  if (S.chip.id) return setChipZoom(S.chip.zoom + d * 5);
+  S.grid.size = Math.max(1, S.grid.size + d); refresh('grid');
+}
+function nudgeGridSpacing(d) { if (S.chip.id) return; const g = S.grid; g.gapX = g.gapY = Math.max(0, g.gapX + d); refresh('grid'); }
