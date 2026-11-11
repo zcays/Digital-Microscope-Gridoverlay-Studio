@@ -12,7 +12,7 @@ const run = (win, code) => win.eval(code);                       // top-level co
 const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 function test(name, fn) { try { const r = fn(); results.push([name, r === undefined || r === true, r === false ? 'returned false' : '']); } catch (e) { results.push([name, false, e.message]); } }
 
-frame.onload = () => setTimeout(() => {
+frame.onload = () => setTimeout(async () => {
   const w = frame.contentWindow, E = code => run(w, code);
   E('loadSample()');
 
@@ -95,6 +95,36 @@ frame.onload = () => setTimeout(() => {
     E('S.img.scale = 2; S.img.x = 50; S.img.y = 20'); const r = E('canvasRectToImageRect({x: 250, y: 120, w: 400, h: 200})');
     E('resetImageTransform()'); return near(r.x, 100) && near(r.y, 50) && near(r.w, 200) && near(r.h, 100);
   });
+
+  // ---- software renderer (used when WebGL / hardware acceleration is off) ----
+  // 1) forced software mode in a second copy of the app: index.html?renderer=cpu
+  const f2 = document.createElement('iframe'); f2.src = 'index.html?renderer=cpu&t=' + Date.now(); document.body.append(f2);
+  await new Promise(r => f2.onload = r); await new Promise(r => setTimeout(r, 500));
+  const w2 = f2.contentWindow, E2 = code => w2.eval(code);
+  E2('loadSample()');
+  test('?renderer=cpu: app starts in software mode and loads an image', () => E2('useGL') === false && E2('rendererName()') === 'software' && E2('S.img.el') !== null);
+  test('software mode: lens + distortion + crop render and export (image pixels present)', () => {
+    E2('S.lens.k1 = .25; S.warp.c.se = {x: .9, y: .9}; S.img.crop = {x: 100, y: 100, w: 900, h: 600}'); const c = E2('buildExportCanvas({image: true, grid: true})');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let op = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) op++; return c.width === 1200 && op > 100000;
+  });
+  // 2) the software renderer must match the GPU renderer
+  if (E('useGL')) {
+    const states = {
+      identity: '', lens: 'S.lens.k1 = .25; S.lens.k2 = .05', rotate: 'S.img.rot = 12; S.img.x = 40; S.img.scale = .9',
+      crop: 'S.img.crop = {x: 200, y: 100, w: 700, h: 500}', warp: 'S.warp.c.se = {x: .92, y: .88}; S.warp.dev.w = {x: -.03, y: 0}',
+      combined: 'S.lens.k1 = .2; S.img.rot = -6; S.warp.c.ne = {x: .95, y: .05}',
+    };
+    const reset = 'resetLens(); resetImageTransform(); resetWarp(); S.img.crop = null';
+    const snap = () => { const t = document.createElement('canvas'); t.width = E('S.doc.w'); t.height = E('S.doc.h'); const x = t.getContext('2d'); x.drawImage(E('dom.gl'), 0, 0, t.width, t.height); return x.getImageData(0, 0, t.width, t.height).data; };
+    const gpu = {}; for (const k in states) { E(reset); E(states[k]); E('renderImage({full: true})'); gpu[k] = snap(); }
+    E("enterCpuMode('Test')");                                   // from here on the main iframe uses the software renderer
+    for (const k in states) {
+      E(reset); E(states[k]); E('renderImage({full: true})'); const cpu = snap(); let sum = 0, alphaFlips = 0;
+      for (let i = 0; i < cpu.length; i += 4) { for (let c = 0; c < 4; c++) sum += Math.abs(cpu[i + c] - gpu[k][i + c]); if (Math.abs(cpu[i + 3] - gpu[k][i + 3]) > 128) alphaFlips++; }
+      const mean = sum / cpu.length, flips = alphaFlips / (cpu.length / 4);
+      test(`software renderer matches GPU: ${k} (mean diff ${mean.toFixed(2)}/255, edge pixels ${(flips * 100).toFixed(2)}%)`, () => mean < 4 && flips < .015);
+    }
+  } else test('software renderer vs GPU comparison skipped (no WebGL in this browser)', () => true);
 
   const bad = results.filter(r => !r[1]);
   out.innerHTML = `<p class="${bad.length ? 'bad' : 'ok'}">${results.length - bad.length} / ${results.length} passed</p>` +

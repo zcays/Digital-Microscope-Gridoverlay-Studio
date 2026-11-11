@@ -36,7 +36,7 @@ function docPoint(e) {
 /* ---------------- status bar + µm ruler ---------------- */
 function updateStatusBar() {
   const k = pxPerUm(), c = S.cursor;
-  $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px`;
+  $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px · ${rendererName()}`;
   $('#sZoom').textContent = Math.round(S.zoom * 100) + '%';
   $('#sPos').textContent = !c ? '' : k ? `x ${Math.round(c.x / k)} µm  y ${Math.round(c.y / k)} µm` : `x ${Math.round(c.x)}  y ${Math.round(c.y)}`;
   updateScaleBar(k);

@@ -15,9 +15,9 @@ function downscaleToFit(src, max) {
 
 /** Make `src` (Image or canvas) the working image and reset everything that depended on the old one. */
 function setImage(src) {
-  src = downscaleToFit(src, Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), MAX_DOC));
+  src = downscaleToFit(src, maxTextureSize());
   const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
-  uploadTexture(src);
+  setRendererImage(src);
   Object.assign(S.img, {el: src, w, h, crop: null}, defaultImageTransform());
   Object.assign(S.lens, defaultLens());
   S.doc = {w, h}; S.crop = null; undoStack.length = 0;

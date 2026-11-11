@@ -10,5 +10,7 @@ Start with **[ARCHITECTURE.md](ARCHITECTURE.md)** — file map, concepts, recipe
 5. Classic `<script>` tags, order in `grid-studio/index.html` matters; new files must be added there.
 6. Verify: open `grid-studio/tests.html` (expect PASS) and exercise the feature in the app with no console errors.
    Browsers cache JS during development: hard-refresh before concluding something "didn't change".
-7. Keep the product rule: **the grid is static; the image is adjusted to fit it.**
-8. Don't commit secrets or machine-specific folders (`.claude/` is git-ignored).
+7. Image drawing has two renderers (GPU `gl.js`, software `cpu.js`, chosen in `render.js`). Call `renderImage()`, and mirror
+   any image-maths change in both files; `tests.html` compares them.
+8. Keep the product rule: **the grid is static; the image is adjusted to fit it.**
+9. Don't commit secrets or machine-specific folders (`.claude/` is git-ignored).

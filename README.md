@@ -5,7 +5,7 @@ correcting fisheye distortion, nudging the image with the arrow keys, and croppi
 
 ## Requirements
 
-- A current desktop browser with WebGL: Chrome, Edge, Firefox or Safari.
+- A current desktop browser: Chrome, Edge, Firefox or Safari. WebGL (GPU) is used when available, otherwise it falls back to software rendering.
 - Nothing else. There are no dependencies and no build step.
 
 ## Install
@@ -37,7 +37,11 @@ correcting fisheye distortion, nudging the image with the arrow keys, and croppi
 
 3. Click **Load sample** to try it with a built-in fisheye test image, or **Open image…** (or drag and drop / paste) to use your own.
 
-If the page is blank, check that WebGL is enabled in your browser settings.
+**Hardware acceleration off?** It still works. If the browser blocks WebGL (for example "Use hardware acceleration" is switched off,
+or on a remote / locked-down machine) the app switches itself to a built-in software renderer, shows a notice, and the status bar
+says `software` instead of `GPU`. The picture is the same; large images with fisheye correction or distortion just take a moment
+longer (heavy edits are drawn at reduced resolution while you drag, then sharpen when you pause; export is always full quality).
+Add `?renderer=cpu` to the address to force software mode for testing.
 
 ## Features
 
@@ -87,6 +91,6 @@ Self-tests: open `grid-studio/tests.html` (should say PASS).
 ## Project layout
 
 `grid-studio/index.html` is the page, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
-`state` (state + scheduler), `presets` (chip table + scale), `actions`, `warp` (distort), `gl` (image layer), `images`, `grid`,
+`state` (state + scheduler), `presets` (chip table + scale), `actions`, `warp` (distort), `gl` (GPU image layer), `cpu` (software image layer), `render` (picks one), `images`, `grid`,
 `view`, `crop`, `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
 loaded in order, which is why the app also works from disk. Chip data lives in `grid-studio/js/presets.js`.

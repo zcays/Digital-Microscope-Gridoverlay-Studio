@@ -6,6 +6,7 @@
  * Pass 1 is an INVERSE mapping (for each output pixel, where does it come from); pass 2 is a FORWARD mesh.
  * Crop (S.img.crop) is a mask applied in the corrected-image space, so it moves/scales/rotates with the image and never touches the grid.
  * Lens model: sample radius r' = r·(1 − k1·r² − k2·r⁴), r normalised by half the image diagonal. +k1 fixes barrel/fisheye.
+ * This is the GPU path. render.js falls back to cpu.js (same maths, software) when WebGL is unavailable — keep them in sync.
  * Premultiplied alpha is used throughout. Add new image effects to FRAGMENT_SRC (and a uniform in UNIFORMS + drawImagePass). */
 
 const VERTEX_SRC = `
@@ -72,9 +73,16 @@ function setupTexture(tex, filter = gl.LINEAR) {
                         [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, p, v);
 }
 
+/** Set up WebGL. Returns false (and leaves the canvas unusable for GL) if WebGL or the shaders are unavailable → render.js falls back to cpu.js. */
 function initGL() {
-  gl = dom.gl.getContext('webgl', {premultipliedAlpha: true, preserveDrawingBuffer: true, alpha: true});
-  if (!gl) { alert('WebGL is not available in this browser.'); return; }
+  try {
+    gl = dom.gl.getContext('webgl', {premultipliedAlpha: true, preserveDrawingBuffer: true, alpha: true});
+    if (!gl) return false;
+    setupGL();
+    return true;
+  } catch (err) { console.warn('WebGL setup failed, using the software renderer:', err); gl = null; return false; }
+}
+function setupGL() {
   program = linkProgram(VERTEX_SRC, FRAGMENT_SRC, ['a']);
   warpProgram = linkProgram(WARP_VERTEX_SRC, WARP_FRAGMENT_SRC, ['a_pos', 'a_uv']);
   UNIFORMS.forEach(n => uniform[n] = gl.getUniformLocation(program, n));

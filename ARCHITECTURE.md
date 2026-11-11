@@ -31,7 +31,9 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `presets.js` | The chip table (`CHIPS`), µm→px scale (`pxPerUm`), image calibration (`umPerPx`), chip select / zoom / fit logic, the chip info box | add or fix a chip version; change scaling rules |
 | `actions.js` | Small named commands (reset, centre, fit, toggle grid, nudge) | add a one-line command reused by buttons + keys |
 | `warp.js` | Distort tool: control-point maths, mesh generation, on-canvas handles, its drag types | change how distortion works |
-| `gl.js` | WebGL: shaders, two-pass render (`renderGL`), texture upload | add an image effect, change the lens model |
+| `gl.js` | WebGL (GPU): shaders, two-pass render (`renderGL`), texture upload | add an image effect, change the lens model |
+| `cpu.js` | Software renderer (Canvas 2-D): same picture as `gl.js`, used when WebGL is unavailable | mirror any change made in `gl.js` |
+| `render.js` | Chooses GPU or software: `initRenderer`, `renderImage`, `enterCpuMode`, `maxTextureSize`, `setRendererImage` | change the fallback rules |
 | `images.js` | Load file / paste / drop, built-in fisheye sample, `setImage()` (reset-everything entry point) | change what happens on image load |
 | `grid.js` | `gridLayout()` (where cells go) and `drawGrid()` (draws them; also used for export) | change grid geometry or look |
 | `view.js` | Stage size, view zoom, pointer→canvas coords, status bar, µm scale bar | change zoom or status readouts |
@@ -64,6 +66,15 @@ displayed µm/px is then that microscope's calibration.
 **Two grid modes.** `activePreset()` null → manual sliders (`S.grid`). Non-null → chip geometry. In chip mode
 `S.chip.fit` (default) makes the canvas = real N×M array + a border (`S.chip.margin` %), restoring the old canvas size
 on untick (`S.chip.savedDoc`); otherwise the grid tiles across the existing canvas.
+
+**Two renderers, one picture.** With hardware acceleration off many browsers give no WebGL. `render.js` tries WebGL
+(`initGL()` returns false on any failure, and a lost context also triggers it) and otherwise calls `enterCpuMode()`, which swaps in a
+fresh `<canvas>` (a canvas that had a WebGL context cannot give a 2-D one) and uses `cpu.js`. Everything else calls only
+`renderImage()` / `maxTextureSize()` / `setRendererImage()` — never `renderGL()` / `uploadTexture()` directly. The status bar shows
+`GPU` or `software`; `index.html?renderer=cpu` forces software. `cpu.js` is a JS twin of the shader (per-pixel lens + bilinear,
+transformed `drawImage` when there is no lens, triangle mesh for the distortion) and draws heavy interactive frames at ~1 MP, then a
+full-quality frame ~250 ms later; export always uses full quality. **Any change to the image maths in `gl.js` must be repeated in
+`cpu.js`** — `tests.html` renders six cases with both and requires them to match.
 
 **Image pipeline (gl.js).** Pass 1 (fragment shader, inverse mapping): translate/scale/rotate then radial lens
 correction `r' = r(1 − k1 r² − k2 r⁴)`. Pass 2 (only if the distortion is not identity): the pass-1 result is drawn on a
@@ -100,6 +111,8 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 * **Browsers cache the `.js/.css` files while you develop** (a normal reload may serve old code). Hard refresh (⌘⇧R)
   or open DevTools → Network → "Disable cache".
 * **Comment terminators:** a stray missing `*/` in a file header silently comments out the whole file.
+* **Don't call `renderGL()` directly** (it only exists on the GPU path) — use `renderImage()`. `dom.gl` is *replaced* by a new element in
+  software mode, so never cache a reference to it across frames.
 * **WebGL feedback loops:** pass 1 renders into `fbTexture`; never have it bound as the sampled texture at the same time.
 * **Distort handles** live outside the canvas box, so the stage is `overflow: visible` when `data-tool="warp"` (css).
 * **`drawGrid()` must never clear its canvas.** Export draws the grid on top of the image in one canvas; a `clearRect` inside it once
@@ -121,4 +134,5 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
   as given (assumed to be the top opening).
 * Table quirk: V10.2 and V12 list well counts one lower than array size ÷ pitch (66 vs 66.7; 49 vs 50).
   Kept as given — check with the owner of the table.
-* No automated pixel tests; `tests.html` checks maths and behaviour only.
+* Software mode is roughly 0.4 s per full 2000×2000 render with a lens (GPU: instant) and the distortion uses a coarser mesh (16×16).
+* `tests.html` has a few pixel-level checks (export contents, GPU vs software), but no general visual regression tests.

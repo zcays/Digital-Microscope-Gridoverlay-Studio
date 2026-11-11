@@ -8,7 +8,7 @@ function frame() {
   rafId = 0;
   const f = dirtyFlags;
   if (f.layout) { layout(); f.layout = false; f.gl = true; }
-  if (f.gl) { renderGL(); f.gl = false; }
+  if (f.gl) { renderImage(); f.gl = false; }
   if (f.grid) { renderGrid(); f.grid = false; }
   if (f.crop) { updateCrop(); f.crop = false; }
   if (f.warp) { updateWarpUI(); f.warp = false; }
@@ -32,7 +32,7 @@ function wireTopBar() {
 }
 
 function init() {
-  initGL();
+  initRenderer();
   buildWarpOverlay();
   buildPanels();
   wireTopBar();
