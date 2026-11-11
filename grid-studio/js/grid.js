@@ -1,5 +1,12 @@
 'use strict';
-/* The static grid overlay. Pure drawing code: also used for PNG export. */
+/* grid.js — the grid overlay: layout maths (gridLayout) and drawing (drawGrid). Draws into <canvas id="grid"> and, with k=1, into the PNG export.
+ * The grid is STATIC: it depends only on S.grid / S.chip / canvas size, never on the image.
+ * Two modes, chosen by activePreset() (presets.js):
+ *   chip ticked → shape/size/pitch come from the chip table × pxPerUm() (true to scale). Either just the real N×M array centred
+ *                 (S.chip.fit) or tiled across the whole canvas.
+ *   no chip     → manual sliders: size, gaps, dead-space margins, cols/rows.
+ * gridLayout() returns {shape, size, pitchX, pitchY, i0..i1, j0..j1, x0, y0} in canvas px; cell (i,j) is at x0+i·pitchX, y0+j·pitchY.
+ * Outlines are drawn INSET so the outer edge of a cell is always exactly `size` (stroke width never changes the geometry). */
 
 const MAX_CELLS = 400000;
 

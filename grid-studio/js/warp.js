@@ -1,5 +1,7 @@
 'use strict';
-/* Free distortion of the image layer. Eight handles: 4 corners and 4 sides.
+/* warp.js — the Distort tool: free distortion of the image layer, drawn by gl.js (pass 2).
+ * Registers TOOLS.warp and the warpCorner / warpEdge / warpBow drag types at the bottom of this file.
+ * Eight handles: 4 corners and 4 sides.
  *   corner drag      → moves that corner (skew / perspective-like)
  *   side drag        → moves the whole edge (both of its corners)
  *   Alt + side drag  → bows the edge into a curve (stored as an offset from the edge's midpoint)
@@ -73,3 +75,31 @@ function updateWarpUI() {
   for (const k of SIDES) place(warpHandles[k], sidePoint(k), W, H);
 }
 function place(el, p, W, H) { el.style.left = p.x * W + 'px'; el.style.top = p.y * H + 'px'; }
+
+/* ---------------- tool + mouse drags (registered into the registries in state.js) ---------------- */
+// Pointer positions arrive in canvas px; warp points are canvas-normalised, so convert and work with deltas.
+const normPoint = p => ({x: p.x / S.doc.w, y: p.y / S.doc.h});
+const warpDelta = (d, p) => { const n = normPoint(p); return {x: n.x - d.p0.x, y: n.y - d.p0.y}; };
+const handleKey = e => e.target.dataset && e.target.dataset.w;       // 'nw' … 'w' from the .wh handle element
+
+TOOLS.warp = {
+  cursor: 'default',
+  pick(e) {
+    const k = handleKey(e); if (!k) return null;
+    return CORNERS.includes(k) ? 'warpCorner' : e.altKey ? 'warpBow' : 'warpEdge';
+  },
+};
+Object.assign(dragTypes, {
+  warpCorner: {
+    start: (e, p) => { const key = handleKey(e); return {key, p0: normPoint(p), c0: {...S.warp.c[key]}}; },
+    move: (d, e, p) => { const m = warpDelta(d, p); S.warp.c[d.key] = {x: d.c0.x + m.x, y: d.c0.y + m.y}; dirty('gl', 'warp'); },
+  },
+  warpEdge: {                                                        // moves both corners of the edge
+    start: (e, p) => { const ends = SIDE_ENDS[handleKey(e)]; return {ends, p0: normPoint(p), c0: ends.map(k => ({...S.warp.c[k]}))}; },
+    move: (d, e, p) => { const m = warpDelta(d, p); d.ends.forEach((k, i) => S.warp.c[k] = {x: d.c0[i].x + m.x, y: d.c0[i].y + m.y}); dirty('gl', 'warp'); },
+  },
+  warpBow: {                                                         // Alt + side handle: curve the edge
+    start: (e, p) => { const key = handleKey(e); return {key, p0: normPoint(p), v0: {...S.warp.dev[key]}}; },
+    move: (d, e, p) => { const m = warpDelta(d, p); S.warp.dev[d.key] = {x: d.v0.x + m.x, y: d.v0.y + m.y}; dirty('gl', 'warp'); },
+  },
+});

@@ -1,5 +1,8 @@
 'use strict';
-/* Crop selection geometry, apply and undo. Rects are {x, y, w, h} in document pixels. */
+/* crop.js — the Crop tool. Rects are {x, y, w, h} in canvas px.
+ * "Applying" a crop does not touch image pixels: it shifts S.img.x/y and shrinks S.doc, so the selection
+ * becomes the new canvas. Undo restores the previous doc size and image position (undoStack).
+ * Registers TOOLS.crop and the cropNew / cropMove / cropResize drag types at the bottom of this file. */
 
 const rectHasArea = r => r && r.w >= 1 && r.h >= 1;
 
@@ -80,3 +83,30 @@ function updateCrop() {
   $('#cropInfo').textContent = c ? `Selection ${Math.round(c.w)} × ${Math.round(c.h)} px at (${Math.round(c.x)}, ${Math.round(c.y)})` : 'No selection';
   $('#cropApply').disabled = !rectHasArea(c);
 }
+
+/* ---------------- tool + mouse drags (registered into the registries in state.js) ---------------- */
+const insideRect = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+
+TOOLS.crop = {
+  cursor: 'crosshair',
+  enter() { if (S.img.el) startCrop(); },
+  pick(e, p) {                                                   // which drag starts on mouse-down
+    if (e.target.dataset && e.target.dataset.h) return 'cropResize';   // a handle of #cropbox
+    return S.crop && insideRect(p, S.crop) ? 'cropMove' : 'cropNew';
+  },
+};
+Object.assign(dragTypes, {
+  cropNew: {
+    start: (e, p) => { S.crop = {x: p.x, y: p.y, w: 0, h: 0}; return {p0: p}; },
+    move: (d, e, p) => { S.crop = rectFromPoints(d.p0, p, ratioValue()); dirty('crop'); },
+    end: () => { if (!(S.crop.w >= 2 && S.crop.h >= 2)) { S.crop = null; startCrop(); dirty('crop'); } },   // a click, not a drag
+  },
+  cropMove: {
+    start: (e, p) => ({p0: p, r0: {...S.crop}}),
+    move: (d, e, p) => { S.crop = clampRect({...d.r0, x: d.r0.x + p.x - d.p0.x, y: d.r0.y + p.y - d.p0.y}); dirty('crop'); },
+  },
+  cropResize: {
+    start: (e, p) => ({p0: p, r0: {...S.crop}, handle: e.target.dataset.h}),
+    move: (d, e, p) => { S.crop = resizeRect(d.r0, d.handle, {x: p.x - d.p0.x, y: p.y - d.p0.y}, ratioValue()); dirty('crop'); },
+  },
+});

@@ -1,7 +1,11 @@
 'use strict';
-/* WebGL image layer.
- * Pass 1 draws the image with translate / scale / rotate and the radial lens correction.
- * Pass 2 (only when a distortion is set) re-draws that result on a warped mesh, see warp.js. */
+/* gl.js — the image layer, drawn with WebGL into <canvas id="gl"> (canvas-sized, preserveDrawingBuffer so export can read it).
+ *
+ * PIPELINE (renderGL): source texture → [pass 1: fragment shader: translate/scale/rotate + radial lens correction]
+ *   → (only if a distortion is set) offscreen texture → [pass 2: warped mesh, vertices from warp.js] → canvas.
+ * Pass 1 is an INVERSE mapping (for each output pixel, where does it come from); pass 2 is a FORWARD mesh.
+ * Lens model: sample radius r' = r·(1 − k1·r² − k2·r⁴), r normalised by half the image diagonal. +k1 fixes barrel/fisheye.
+ * Premultiplied alpha is used throughout. Add new image effects to FRAGMENT_SRC (and a uniform in UNIFORMS + drawImagePass). */
 
 const VERTEX_SRC = `
 attribute vec2 a; varying vec2 v;

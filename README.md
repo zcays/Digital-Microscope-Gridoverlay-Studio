@@ -50,7 +50,14 @@ If the page is blank, check that WebGL is enabled in your browser settings.
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
 - PNG export of image + grid
 
+## For developers and AI agents
+
+See **[ARCHITECTURE.md](ARCHITECTURE.md)** (how it works, file map, how to add chips / tools / settings, gotchas) and **[AGENTS.md](AGENTS.md)**.
+Self-tests: open `grid-studio/tests.html` (should say PASS).
+
 ## Project layout
 
-`grid-studio/index.html` is the page, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern
-(state, presets, warp, gl, grid, crop, controls, input, main). Chip data lives in `grid-studio/js/presets.js`. Scripts are plain `<script>` tags loaded in order, which is why the app also works from disk.
+`grid-studio/index.html` is the page, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
+`state` (state + scheduler), `presets` (chip table + scale), `actions`, `warp` (distort), `gl` (image layer), `images`, `grid`,
+`view`, `crop`, `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
+loaded in order, which is why the app also works from disk. Chip data lives in `grid-studio/js/presets.js`.

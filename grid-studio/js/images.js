@@ -1,5 +1,7 @@
 'use strict';
-/* Loading images (file / drop / paste) and the built-in fisheye sample. */
+/* images.js — getting an image into the app: file picker / drag-drop / paste (loadFile) and the built-in test picture (loadSample).
+ * setImage() is the one entry point: it uploads the texture (gl.js), resets image/lens/crop state, sizes the canvas to the image,
+ * and — if a chip is ticked — re-fits the canvas to the chip array (presets.js). Images larger than the GPU limit are downscaled. */
 
 function downscaleToFit(src, max) {
   const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;

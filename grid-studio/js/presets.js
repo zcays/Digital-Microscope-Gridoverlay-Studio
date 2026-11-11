@@ -1,6 +1,15 @@
 'use strict';
-/* Chip versions (from the well-geometry table) and the physical scale they imply.
- * All lengths are in µm. pitch = well size + top wall width, and wide × pitch ≈ array width. */
+/* presets.js — chip versions (the well-geometry table) and the physical scale they imply.
+ *
+ * DATA: CHIPS below mirrors the lab's table. All lengths are µm. pitch = well + wall; wide × pitch ≈ widthUm.
+ *       To add a chip, add one object here (the settings panel and tests pick it up automatically).
+ *       Only shape / well / pitch / wide / long affect drawing; the other fields are shown in the info box.
+ * SCALE: pxPerUm() = canvas px per µm for the ticked chip (null when none). Everything true-to-scale derives from it
+ *        (well px = well µm × k, pitch px = pitch µm × k), so well : wall : pitch proportions are always exact.
+ *        Two modes: S.chip.fit (canvas = array + dead-room border, the default) or tile across a fixed canvas.
+ * IMAGE: umPerPx() = the image's µm per pixel. keepingImageScale() keeps it constant when the grid scale/chip changes
+ *        (the microscope doesn't change), so changing chips or grid zoom rescales the image along with the grid.
+ * Draft angle, bottom shape and depth are NOT drawn (2-D top view only). */
 
 const CHIPS = [
   {id: 'V1-Square', shape: 'square', bottom: '12% draft angle', draft: 12,   pitch: 500, well: 470, wall: 30, depth: 400, widthUm: 19500, lengthUm: 9500,  wide: 39,  long: 19},

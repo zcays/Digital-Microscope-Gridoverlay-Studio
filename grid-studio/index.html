@@ -76,18 +76,22 @@
 <div id="scalebar"><div class="bar"></div><span></span></div>
 <div id="toast"></div>
 
-<!-- Classic scripts (not ES modules) so the app also works when opened straight from disk. Order matters. -->
-<script src="js/state.js"></script>
-<script src="js/presets.js"></script>
-<script src="js/actions.js"></script>
-<script src="js/warp.js"></script>
-<script src="js/gl.js"></script>
-<script src="js/images.js"></script>
-<script src="js/grid.js"></script>
-<script src="js/view.js"></script>
-<script src="js/crop.js"></script>
-<script src="js/controls.js"></script>
-<script src="js/input.js"></script>
-<script src="js/main.js"></script>
+<!-- Classic scripts (not ES modules) so the app also works when opened straight from disk. ORDER MATTERS:
+     they share one global scope; state.js first, main.js last (it starts the app). See ../ARCHITECTURE.md. -->
+<script src="js/state.js"></script>     <!-- S, registries, redraw scheduler -->
+<script src="js/presets.js"></script>   <!-- chip versions + µm scale -->
+<script src="js/actions.js"></script>   <!-- small shared commands -->
+<script src="js/warp.js"></script>      <!-- Distort tool -->
+<script src="js/gl.js"></script>        <!-- WebGL image layer -->
+<script src="js/images.js"></script>    <!-- load image / sample -->
+<script src="js/grid.js"></script>      <!-- grid layout + drawing -->
+<script src="js/view.js"></script>      <!-- zoom, status bar, µm ruler -->
+<script src="js/crop.js"></script>      <!-- Crop tool -->
+<script src="js/ui.js"></script>        <!-- widget helpers -->
+<script src="js/panels.js"></script>    <!-- settings panels -->
+<script src="js/tools.js"></script>     <!-- tools + mouse -->
+<script src="js/keyboard.js"></script>  <!-- shortcuts + help -->
+<script src="js/export.js"></script>    <!-- PNG export -->
+<script src="js/main.js"></script>      <!-- frame loop + init -->
 </body>
 </html>

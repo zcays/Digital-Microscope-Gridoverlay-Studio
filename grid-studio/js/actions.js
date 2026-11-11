@@ -1,14 +1,15 @@
 'use strict';
-/* Small state-changing commands shared by buttons, shortcuts and sliders. */
+/* actions.js — small named commands that change S. Shared by buttons, keyboard shortcuts and sliders
+ * so the same behaviour is never written twice. Add new one-liner commands here. */
 
 function toggleGrid() { S.grid.visible = !S.grid.visible; refresh('grid'); }
-function toggleBypass() { S.lens.bypass = !S.lens.bypass; refresh('gl'); }
+function toggleBypass() { S.lens.bypass = !S.lens.bypass; refresh('gl'); }       // before / after for the fisheye correction
 function resetLens() { Object.assign(S.lens, defaultLens()); refresh('gl'); }
 function resetImageTransform() { Object.assign(S.img, defaultImageTransform()); refresh('gl'); }
 
 function centerImage() {
   const I = S.img; if (!I.el) return;
-  I.x = (S.doc.w - I.w * I.scale) / 2; I.y = (S.doc.h - I.h * I.scale) / 2; refresh('gl');
+  I.x = (S.doc.w - I.w * I.scale) / 2; I.y = (S.doc.h - I.h * I.scale) / 2; refresh('gl', 'status');
 }
 function fitImageToCanvas() {
   const I = S.img; if (!I.el) return;
@@ -16,8 +17,7 @@ function fitImageToCanvas() {
 }
 function nudgeImage(dx, dy) { if (!S.img.el) return; S.img.x += dx; S.img.y += dy; refresh('gl'); }
 
-/** Shortcut helpers for the two most-used grid settings. */
-/** With a chip ticked, [ ] zoom the true-to-scale grid instead; spacing keys do nothing (spacing comes from the chip). */
+/* [ ] and { } shortcuts. With a chip ticked the grid size comes from the chip, so [ ] zoom the grid and { } do nothing. */
 function nudgeGridSize(d) {
   if (S.chip.id) return setChipZoom(S.chip.zoom + d * 5);
   S.grid.size = Math.max(1, S.grid.size + d); refresh('grid');

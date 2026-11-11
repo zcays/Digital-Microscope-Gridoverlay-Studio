@@ -1,5 +1,7 @@
 'use strict';
-/* Stage sizing and zoom. The canvases are document-sized; zoom is applied with CSS size. */
+/* view.js — how the canvas is shown: stage size, VIEW zoom, pointer→canvas mapping, status bar, µm scale bar.
+ * The canvases (#gl, #grid) are always canvas-sized in pixels; zoom only changes their CSS size.
+ * Changing S.zoom never changes the document or the exported PNG. */
 
 const ZOOM_MIN = .05, ZOOM_MAX = 8;
 
@@ -29,4 +31,23 @@ const zoomIn = () => setZoom(S.zoom * 1.25), zoomOut = () => setZoom(S.zoom / 1.
 function docPoint(e) {
   const r = dom.stage.getBoundingClientRect();
   return {x: (e.clientX - r.left) / S.zoom, y: (e.clientY - r.top) / S.zoom};
+}
+
+/* ---------------- status bar + µm ruler ---------------- */
+function updateStatusBar() {
+  const k = pxPerUm(), c = S.cursor;
+  $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px`;
+  $('#sZoom').textContent = Math.round(S.zoom * 100) + '%';
+  $('#sPos').textContent = !c ? '' : k ? `x ${Math.round(c.x / k)} µm  y ${Math.round(c.y / k)} µm` : `x ${Math.round(c.x)}  y ${Math.round(c.y)}`;
+  updateScaleBar(k);
+  updateChipInfo();
+}
+
+/** Ruler in real µm (only while a chip version is ticked): lets you check well size and spacing against the table. */
+function updateScaleBar(k) {
+  const bar = $('#scalebar');
+  bar.style.display = k ? 'block' : 'none'; if (!k) return;
+  const um = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].find(u => u * k * S.zoom >= 70) || 10000;
+  bar.firstElementChild.style.width = um * k * S.zoom + 'px';
+  bar.lastElementChild.textContent = um >= 1000 ? um / 1000 + ' mm' : um + ' µm';
 }

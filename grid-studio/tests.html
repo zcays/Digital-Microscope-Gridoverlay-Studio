@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Self-tests</title>
+<style>body{font:13px/1.5 ui-monospace,Menlo,monospace;background:#1b1b1b;color:#d6d6d6;padding:16px}
+.ok{color:#34c759}.bad{color:#ff3b30;font-weight:700}h1{font:600 16px sans-serif}iframe{position:absolute;left:-9999px;width:1200px;height:800px}</style></head>
+<body><h1>Digital Microscope Gridoverlay Studio: self-tests</h1><div id="out">running…</div>
+<iframe id="app" src="index.html"></iframe>
+<!-- Loads the real app in a hidden iframe and checks its maths and behaviour through the app's own globals.
+     Open this page the same way as the app (double-click, or http://localhost:8765/tests.html). No libraries. -->
+<script>
+const frame = document.getElementById('app'), out = document.getElementById('out'), results = [];
+const run = (win, code) => win.eval(code);                       // top-level const/let of classic scripts are reachable via eval, not via win.X
+const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
+function test(name, fn) { try { const r = fn(); results.push([name, r === undefined || r === true, r === false ? 'returned false' : '']); } catch (e) { results.push([name, false, e.message]); } }
+
+frame.onload = () => setTimeout(() => {
+  const w = frame.contentWindow, E = code => run(w, code);
+  E('loadSample()');
+
+  // ---- chip table integrity (catches typos in presets.js) ----
+  for (const c of E('CHIPS')) {
+    test(`${c.id}: pitch = well + wall`, () => c.pitch === c.well + c.wall);
+    // the table rounds well counts down (V10.2: 66 x 120 = 7920 of 8000, V12: 49 x 200 = 9800 of 10000), so allow up to one pitch of slack
+    test(`${c.id}: wells x pitch fits the stated array size to within one pitch`, () => c.wide * c.pitch <= c.widthUm + 1e-9 && c.widthUm - c.wide * c.pitch <= c.pitch && c.long * c.pitch <= c.lengthUm + 1e-9 && c.lengthUm - c.long * c.pitch <= c.pitch);
+  }
+
+  // ---- true-to-scale grid: drawn well / pitch must equal the table's ratio, for every chip, fit and tiled ----
+  for (const fit of [true, false]) for (const c of E('CHIPS')) test(`${c.id}: well/pitch ratio exact (${fit ? 'fit' : 'tiled'})`, () => {
+    E(`S.chip.fit = ${fit}; selectChip(null); selectChip('${c.id}')`);
+    const L = E('gridLayout(S.doc.w, S.doc.h)'); return near(L.size / L.pitchX, c.well / c.pitch, 1e-9) && L.shape === c.shape;
+  });
+
+  // ---- fit mode: equal dead room on left/right and top/bottom, and the canvas hugs the array ----
+  E('S.chip.fit = true');
+  for (const c of E('CHIPS')) test(`${c.id}: array centred with equal borders`, () => {
+    E(`selectChip(null); selectChip('${c.id}')`);
+    const L = E('gridLayout(S.doc.w, S.doc.h)'), W = E('S.doc.w'), H = E('S.doc.h');
+    const right = W - (L.x0 + (L.i1 - 1) * L.pitchX + L.size), bottom = H - (L.y0 + (L.j1 - 1) * L.pitchY + L.size);
+    return near(L.x0, right, 1.5) && near(L.y0, bottom, 1.5) && L.x0 > 0 && L.i1 === c.wide && L.j1 === c.long;
+  });
+  E('selectChip(null)');
+  test('unticking a chip restores the canvas size', () => E('S.doc.w') === 1200 && E('S.doc.h') === 800);
+
+  // ---- image µm/px is preserved when the grid scale changes ----
+  test('µm/px stays constant when grid zoom changes', () => {
+    E("selectChip('V3.1')"); const u = E('umPerPx()'); E('setChipZoom(250)'); const u2 = E('umPerPx()'); E('selectChip(null)'); return near(u, u2, 1e-9);
+  });
+
+  // ---- distortion maths ----
+  test('warp: untouched = identity', () => !E('warpActive()') && near(E('warpPoint(.3, .7).x'), .3) && near(E('warpPoint(.3, .7).y'), .7));
+  test('warp: moving a corner changes it', () => { E('S.warp.c.se = {x: .9, y: .9}'); const a = E('warpActive()'); E('resetWarp()'); return a && !E('warpActive()'); });
+  test('warp: side handle moves both corners of its edge (drag simulation)', () => {
+    E("S.tool='warp'"); const d = E("dragTypes.warpEdge.start({target:{dataset:{w:'n'}}}, {x:600, y:0})");
+    E('dragTypes.warpEdge.move')(d, {}, {x: 600, y: 80});
+    const ok = near(E('S.warp.c.nw.y'), 80 / E('S.doc.h'), 1e-9) && near(E('S.warp.c.ne.y'), 80 / E('S.doc.h'), 1e-9); E('resetWarp()'); E("setTool('move')"); return ok;
+  });
+
+  // ---- keyboard ----
+  const key = (k, o = {}) => w.document.body.dispatchEvent(new w.KeyboardEvent('keydown', {key: k, bubbles: true, cancelable: true, ...o}));
+  test('arrow key nudges image 1 px, Shift 10 px', () => { const x = E('S.img.x'); key('ArrowRight'); key('ArrowRight', {shiftKey: true}); return near(E('S.img.x') - x, 11); });
+  test('G toggles grid, R resets image', () => { key('g'); const off = !E('S.grid.visible'); key('g'); key('r'); return off && E('S.grid.visible') && E('S.img.x') === 0; });
+  test('focused slider takes the arrow key (image does not move)', () => {
+    const r = [...w.document.querySelectorAll('.row')].find(r => r.children[0].textContent === 'Strength').children[1]; r.focus();
+    const x = E('S.img.x'), k = E('S.lens.k1'); r.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true, cancelable: true})); r.blur();
+    return E('S.img.x') === x && near(E('S.lens.k1') - k, .01, 1e-9);
+  });
+
+  // ---- crop ----
+  test('crop apply shrinks the canvas, undo restores it', () => {
+    E("setTool('crop'); S.crop = {x: 100, y: 100, w: 600, h: 400}; applyCrop()"); const a = E('S.doc.w') === 600 && E('S.doc.h') === 400; E('undoCrop()'); return a && E('S.doc.w') === 1200;
+  });
+
+  const bad = results.filter(r => !r[1]);
+  out.innerHTML = `<p class="${bad.length ? 'bad' : 'ok'}">${results.length - bad.length} / ${results.length} passed</p>` +
+    results.map(([n, ok, msg]) => `<div class="${ok ? 'ok' : 'bad'}">${ok ? 'PASS' : 'FAIL'}  ${n} ${msg}</div>`).join('');
+  document.title = bad.length ? `FAIL (${bad.length})` : 'PASS';
+}, 600);
+</script></body></html>
