@@ -7,7 +7,7 @@ const KEY_STEP = {
   'Square size': 1, 'Spacing (both)': 1, 'Spacing ↔ horiz.': 1, 'Spacing ↕ vert.': 1,
   'Dead space (all)': 5, 'Space left': 5, 'Space right': 5, 'Space top': 5, 'Space bottom': 5,
   'Offset X': 1, 'Offset Y': 1, 'Columns (0=auto)': 1, 'Rows (0=auto)': 1, 'Corner radius': 1, 'Line width': .5, 'Opacity %': 5,
-  'Grid zoom %': 5, 'Image µm/px': .05, 'Strength': .01, 'Edge falloff': .01, 'Centre X %': 1, 'Centre Y %': 1,
+  'Grid zoom %': 5, 'Dead room %': 1, 'Image µm/px': .05, 'Strength': .01, 'Edge falloff': .01, 'Centre X %': 1, 'Centre Y %': 1,
   'Position X': 1, 'Position Y': 1, 'Scale %': 1, 'Rotate °': .5, 'Width px': 10, 'Height px': 10,
 };
 const ARROW_DIR = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1};
@@ -144,7 +144,8 @@ function buildChipPanel() {
   const tools = document.createElement('div'); p.append(tools);
   slider(tools, 'Grid zoom %', () => S.chip.zoom, v => setChipZoom(v), 10, 1000, 1);
   slider(tools, 'Image µm/px', () => umPerPx() || 0, setImageUmPerPx, 0.1, 40, .01);
-  checkbox(tools, 'Real array only', () => S.chip.arrayOnly, v => { S.chip.arrayOnly = v; dirty('grid'); }, 'just the N × M wells, centred');
+  checkbox(tools, 'Fit canvas to array', () => S.chip.fit, setChipFit, 'canvas = the N × M wells + border');
+  slider(tools, 'Dead room %', () => S.chip.margin, setChipMargin, 0, 40, 1);
   const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);
   note(p, 'Tick a version: the grid takes its shape, well size and pitch from the table, true to scale, and fills the whole canvas. Then move / scale / rotate the image until it lines up with the wells — the µm/px readout is your image\'s calibration. Untick for the manual grid.');
 

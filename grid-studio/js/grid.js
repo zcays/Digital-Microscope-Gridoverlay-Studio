@@ -14,7 +14,7 @@ function gridLayout(w, h) {
     const k = pxPerUm(), size = P.well * k, pitch = P.pitch * k;
     if (size < .5 || pitch < 1) return null;
     const L = {shape: P.shape, size, pitchX: pitch, pitchY: pitch};
-    if (S.chip.arrayOnly) {                  // just the real N × M array, centred
+    if (S.chip.fit) {                        // canvas fits the real N × M array: draw just the array, centred
       Object.assign(L, {i0: 0, i1: P.wide, j0: 0, j1: P.long});
       L.x0 = (w - (P.wide * pitch - (pitch - size))) / 2 + G.offX;
       L.y0 = (h - (P.long * pitch - (pitch - size))) / 2 + G.offY;

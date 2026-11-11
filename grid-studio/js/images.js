@@ -20,6 +20,7 @@ function setImage(src) {
   Object.assign(S.lens, defaultLens());
   S.doc = {w, h}; S.crop = null; undoStack.length = 0;
   dom.emptyHint.style.display = 'none';
+  S.chip.savedDoc = null; applyChipCanvas(); if (S.chip.id) centerImage();     // a ticked chip re-fits the canvas to the new image
   fitZoom(); updateUndoButton(); refresh('gl', 'grid', 'layout', 'crop', 'status');
 }
 

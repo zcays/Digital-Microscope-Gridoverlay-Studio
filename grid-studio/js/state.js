@@ -22,7 +22,7 @@ const S = {
     offX: 0, offY: 0, cols: 0, rows: 0,              // 0 = as many as fit
     radius: 0, stroke: 1, shape: 'square',
   },
-  chip: {id: null, zoom: 100, arrayOnly: false},     // ticked chip version (see presets.js)
+  chip: {id: null, zoom: 100, fit: true, margin: 8, savedDoc: null},     // ticked chip version (see presets.js)
   zoom: 1, tool: 'move', crop: null, ratio: 0, cursor: null,
 };
 const undoStack = [];                       // crop history: {doc, x, y}

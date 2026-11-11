@@ -17,25 +17,59 @@ const CHIPS = [
   {id: 'V15.2',     shape: 'square', bottom: 'draft angle 5%',  draft: 5,    pitch: 100, well: 50,  wall: 50, depth: 100, widthUm: 10000, lengthUm: 10000, wide: 100, long: 100},
 ];
 
-const AUTO_PITCH_PX = 48;                   // at 100 % grid zoom one well pitch is drawn this many canvas px wide
+const AUTO_PITCH_PX = 48;                   // fill-plane mode: at 100 % grid zoom one well pitch is this many canvas px
+const FIT_TARGET_PX = 2000;                 // fit-canvas mode: at 100 % grid zoom the array's longer side is about this many px
+
+/** Real extent of the N × M array in µm (first well edge to last well edge) and the dead-room border around it. */
+function chipGeometry(P) {
+  const extX = P.wide * P.pitch - (P.pitch - P.well), extY = P.long * P.pitch - (P.pitch - P.well);
+  return {extX, extY, longest: Math.max(extX, extY), borderUm: Math.max(extX, extY) * S.chip.margin / 100};
+}
 
 const activePreset = () => S.chip.id ? CHIPS.find(c => c.id === S.chip.id) : null;
 /** Canvas pixels per µm for the active chip (null when no chip is ticked). */
-const pxPerUm = () => { const P = activePreset(); return P ? AUTO_PITCH_PX / P.pitch * S.chip.zoom / 100 : null; };
+function pxPerUm() {
+  const P = activePreset(); if (!P) return null;
+  const base = S.chip.fit ? FIT_TARGET_PX / (chipGeometry(P).longest * 1.16) : AUTO_PITCH_PX / P.pitch;
+  return base * S.chip.zoom / 100;
+}
+/** Largest grid zoom % for which the fitted canvas still fits within MAX_DOC. */
+function maxChipZoom() {
+  const P = activePreset(); if (!P || !S.chip.fit) return 5000;
+  const g = chipGeometry(P), base = FIT_TARGET_PX / (g.longest * 1.16);
+  return Math.floor(100 * MAX_DOC / ((g.longest + 2 * g.borderUm) * base));
+}
 /** Current image calibration in µm per image pixel (null without chip or image). */
 const umPerPx = () => { const k = pxPerUm(); return k && S.img.el ? S.img.scale / k : null; };
 
-/** Run `change`, then rescale the image so its µm-per-pixel stays the same (the microscope doesn't change). */
+/** Resize the canvas to the array plus dead room (or restore the old size). Returns true if the canvas size changed. */
+function applyChipCanvas() {
+  const P = activePreset(), C = S.chip, before = `${S.doc.w}x${S.doc.h}`;
+  if (P && C.fit) {
+    if (!C.savedDoc) C.savedDoc = {...S.doc};
+    const g = chipGeometry(P), k = pxPerUm();
+    S.doc = {w: clamp(Math.round((g.extX + 2 * g.borderUm) * k), 16, MAX_DOC), h: clamp(Math.round((g.extY + 2 * g.borderUm) * k), 16, MAX_DOC)};
+  } else if (C.savedDoc) { S.doc = C.savedDoc; C.savedDoc = null; }
+  const changed = before !== `${S.doc.w}x${S.doc.h}`;
+  if (changed) { undoStack.length = 0; updateUndoButton(); }
+  return changed;
+}
+
+/** Run `change`, keep the image's µm-per-pixel (the microscope doesn't change), then refit the canvas. */
 function keepingImageScale(change) {
   const u = umPerPx();
   change();
   const k = pxPerUm();
   if (u && k) S.img.scale = u * k;
-  refresh('gl', 'grid', 'status');
+  if (applyChipCanvas()) fitZoom();
+  if (!u && S.img.el && activePreset()) fitImageToCanvas();   // first tick: start with the image fitted, then adjust it to the wells
+  refresh('gl', 'grid', 'layout', 'crop', 'status');
 }
 function selectChip(id) { keepingImageScale(() => S.chip.id = id); }
-function setChipZoom(pct) { keepingImageScale(() => S.chip.zoom = clamp(pct, 5, 5000)); }
-function setImageUmPerPx(v) { const k = pxPerUm(); if (!k || !(v > 0)) return; S.img.scale = v * k; dirty('gl'); }
+function setChipZoom(pct) { keepingImageScale(() => S.chip.zoom = clamp(pct, 5, maxChipZoom())); }
+function setChipFit(on) { keepingImageScale(() => S.chip.fit = on); }
+function setChipMargin(pct) { keepingImageScale(() => S.chip.margin = clamp(pct, 0, 40)); }
+function setImageUmPerPx(v) { const k = pxPerUm(); if (!k || !(v > 0)) return; S.img.scale = v * k; dirty('gl', 'status'); }
 
 function updateChipInfo() {
   const el = $('#chipInfo'), P = activePreset();
@@ -45,7 +79,7 @@ function updateChipInfo() {
   el.innerHTML = [
     `<b>${P.id}</b> · ${P.shape} wells · bottom: ${P.bottom}${P.draft ? ` · draft ${P.draft}` : ''}`,
     `pitch ${P.pitch} µm · well ${P.well} µm · wall ${P.wall} µm · depth ${P.depth} µm`,
-    `array ${P.widthUm} × ${P.lengthUm} µm (${P.wide} × ${P.long} wells)`,
+    `array ${P.widthUm} × ${P.lengthUm} µm (${P.wide} × ${P.long} wells)${S.chip.fit ? ' · canvas fitted to array' : ''}`,
     `<b>Scale:</b> ${k.toFixed(3)} px/µm → pitch ${(P.pitch * k).toFixed(1)} px, well ${(P.well * k).toFixed(1)} px`,
     `Canvas shows ${Math.round(S.doc.w / k)} × ${Math.round(S.doc.h / k)} µm`,
     u ? `<b>Image: ${u.toFixed(3)} µm per pixel</b>` : '',
