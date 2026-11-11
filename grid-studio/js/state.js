@@ -9,12 +9,18 @@ const $ = sel => document.querySelector(sel);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 const defaultLens = () => ({k1: 0, k2: 0, cx: .5, cy: .5, bypass: false});
+const defaultWarp = () => ({
+  enabled: true,                                                      // "apply distortion" switch (for before / after)
+  c: {nw: {x: 0, y: 0}, ne: {x: 1, y: 0}, se: {x: 1, y: 1}, sw: {x: 0, y: 1}},   // corners, canvas-normalised
+  dev: {n: {x: 0, y: 0}, e: {x: 0, y: 0}, s: {x: 0, y: 0}, w: {x: 0, y: 0}},     // edge bow offsets from each edge's midpoint
+});
 const defaultImageTransform = () => ({x: 0, y: 0, scale: 1, rot: 0});
 
 const S = {
   doc: {w: 1200, h: 800},
   img: {el: null, w: 0, h: 0, ...defaultImageTransform()},
   lens: defaultLens(),
+  warp: defaultWarp(),
   grid: {
     visible: true, mode: 'outline', color: '#ffffff', opacity: .75,
     size: 12, gapX: 12, gapY: 12,
@@ -33,7 +39,7 @@ const dom = {
 };
 
 /* ---- invalidation: mark what needs redrawing, flush once per animation frame ---- */
-const dirtyFlags = {gl: true, grid: true, layout: true, crop: true, status: true};
+const dirtyFlags = {gl: true, grid: true, layout: true, crop: true, status: true, warp: true};
 let rafId = 0;
 function dirty(...keys) {
   keys.forEach(k => dirtyFlags[k] = true);

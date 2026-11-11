@@ -8,6 +8,7 @@ function frame() {
   if (f.gl) { renderGL(); f.gl = false; }
   if (f.grid) { renderGrid(); f.grid = false; }
   if (f.crop) { updateCrop(); f.crop = false; }
+  if (f.warp) { updateWarpUI(); f.warp = false; }
   if (f.status) {
     $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px`;
     $('#sZoom').textContent = Math.round(S.zoom * 100) + '%';
@@ -49,10 +50,11 @@ function wireTopBar() {
 
 function init() {
   initGL();
+  buildWarpOverlay();
   buildPanels();
   wireTopBar();
   updateCursor(); updateKeyHint(); fitZoom();
-  dirty('gl', 'grid', 'crop', 'status');
+  dirty('gl', 'grid', 'crop', 'status', 'warp');
 }
 init();
 

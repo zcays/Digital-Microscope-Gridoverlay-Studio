@@ -1,5 +1,7 @@
 'use strict';
-/* WebGL image layer: draws the image with translate / scale / rotate and a radial lens correction. */
+/* WebGL image layer.
+ * Pass 1 draws the image with translate / scale / rotate and the radial lens correction.
+ * Pass 2 (only when a distortion is set) re-draws that result on a warped mesh, see warp.js. */
 
 const VERTEX_SRC = `
 attribute vec2 a; varying vec2 v;
@@ -30,7 +32,18 @@ void main(){
 }`;
 const UNIFORMS = ['u_tex', 'u_doc', 'u_img', 'u_pos', 'u_c', 'u_scale', 'u_rot', 'u_k1', 'u_k2'];
 
-let gl, program, texture;
+const WARP_VERTEX_SRC = `
+attribute vec2 a_pos; attribute vec2 a_uv; varying vec2 v;
+void main(){ v = a_uv; gl_Position = vec4(a_pos, 0., 1.); }`;
+const WARP_FRAGMENT_SRC = `
+precision mediump float;
+uniform sampler2D u_tex; varying vec2 v;
+void main(){ gl_FragColor = texture2D(u_tex, v); }`;
+
+const MESH_N = 32;                                        // warp mesh is MESH_N × MESH_N quads
+
+let gl, program, warpProgram, texture, quadBuf, meshBuf, meshIndexBuf, meshIndexCount;
+let fbo, fbTexture, fbSize = {w: 0, h: 0};
 const uniform = {};
 
 function compileShader(type, src) {
@@ -38,22 +51,41 @@ function compileShader(type, src) {
   if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
   return sh;
 }
+function linkProgram(vs, fs, attribs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vs)); gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fs));
+  attribs.forEach((name, i) => gl.bindAttribLocation(p, i, name));      // fixed locations so programs can share attribute slots
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+function setupTexture(tex, filter = gl.LINEAR) {
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  for (const [p, v] of [[gl.TEXTURE_MIN_FILTER, filter], [gl.TEXTURE_MAG_FILTER, filter],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, p, v);
+}
 
 function initGL() {
   gl = dom.gl.getContext('webgl', {premultipliedAlpha: true, preserveDrawingBuffer: true, alpha: true});
   if (!gl) { alert('WebGL is not available in this browser.'); return; }
-  program = gl.createProgram();
-  gl.attachShader(program, compileShader(gl.VERTEX_SHADER, VERTEX_SRC));
-  gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, FRAGMENT_SRC));
-  gl.linkProgram(program); gl.useProgram(program);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());           // full-screen quad, y down
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(program, 'a');
-  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
+  program = linkProgram(VERTEX_SRC, FRAGMENT_SRC, ['a']);
+  warpProgram = linkProgram(WARP_VERTEX_SRC, WARP_FRAGMENT_SRC, ['a_pos', 'a_uv']);
   UNIFORMS.forEach(n => uniform[n] = gl.getUniformLocation(program, n));
-  texture = gl.createTexture();
+
+  quadBuf = gl.createBuffer();                                          // full-screen quad, y down
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+
+  meshBuf = gl.createBuffer();                                          // warp mesh: positions change, indices don't
+  const idx = [], row = MESH_N + 1;
+  for (let j = 0; j < MESH_N; j++) for (let i = 0; i < MESH_N; i++) {
+    const a = j * row + i, b = a + 1, c = a + row, d = c + 1; idx.push(a, b, c, b, d, c);
+  }
+  meshIndexBuf = gl.createBuffer(); meshIndexCount = idx.length;
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIndexBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+
+  texture = gl.createTexture(); fbTexture = gl.createTexture(); fbo = gl.createFramebuffer();
 }
 
 /** Upload a canvas/image as the image texture. Caller guarantees size <= MAX_TEXTURE_SIZE. */
@@ -61,18 +93,27 @@ function uploadTexture(src) {
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-  for (const [p, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
-                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, p, v);
+  setupTexture(texture);
 }
 
-function renderGL() {
-  if (!gl) return;
-  const {w, h} = S.doc, I = S.img, L = S.lens;
-  if (dom.gl.width !== w || dom.gl.height !== h) { dom.gl.width = w; dom.gl.height = h; }
-  gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-  if (!I.el) return;
+/** Make the offscreen target (pass 1 output) match the canvas size and bind it. */
+function bindOffscreen(w, h) {
+  if (fbSize.w !== w || fbSize.h !== h) {
+    gl.bindTexture(gl.TEXTURE_2D, fbTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    setupTexture(fbTexture);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbTexture, 0);
+    fbSize = {w, h};
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+}
 
+function drawImagePass(w, h) {
+  const I = S.img, L = S.lens;
   gl.useProgram(program);
+  gl.disableVertexAttribArray(1);
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texture); gl.uniform1i(uniform.u_tex, 0);
   gl.uniform2f(uniform.u_doc, w, h);
   gl.uniform2f(uniform.u_img, I.w, I.h);
@@ -83,4 +124,35 @@ function renderGL() {
   gl.uniform1f(uniform.u_k1, L.bypass ? 0 : L.k1);
   gl.uniform1f(uniform.u_k2, L.bypass ? 0 : L.k2);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function drawWarpPass() {
+  gl.useProgram(warpProgram);
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, warpMesh(MESH_N), gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbTexture);
+  gl.uniform1i(gl.getUniformLocation(warpProgram, 'u_tex'), 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIndexBuf);
+  gl.drawElements(gl.TRIANGLES, meshIndexCount, gl.UNSIGNED_SHORT, 0);
+  gl.disableVertexAttribArray(1);
+}
+
+function renderGL() {
+  if (!gl) return;
+  const {w, h} = S.doc;
+  if (dom.gl.width !== w || dom.gl.height !== h) { dom.gl.width = w; dom.gl.height = h; }
+  const warped = S.img.el && S.warp.enabled && warpActive();
+
+  if (warped) bindOffscreen(w, h); else gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  if (!S.img.el) return;
+  drawImagePass(w, h);
+
+  if (warped) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h); gl.clear(gl.COLOR_BUFFER_BIT);
+    drawWarpPass();
+  }
 }

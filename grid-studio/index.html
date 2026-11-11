@@ -23,6 +23,7 @@
 
   <div id="tools">
     <button class="tool on" data-tool="move" title="Move image (V)"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg></button>
+    <button class="tool" data-tool="warp" title="Distort (D)"><svg viewBox="0 0 24 24"><path d="M4 6l16-2-2 16L6 18z"/><circle cx="4" cy="6" r="1.4"/><circle cx="20" cy="4" r="1.4"/><circle cx="18" cy="20" r="1.4"/><circle cx="6" cy="18" r="1.4"/></svg></button>
     <button class="tool" data-tool="crop" title="Crop (C)"><svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/></svg></button>
   </div>
 
@@ -36,6 +37,7 @@
     <details open><summary>Chip version</summary><div class="body" id="p-chip"></div></details>
     <details open><summary>Grid</summary><div class="body" id="p-grid"></div></details>
     <details open><summary>Fisheye correction</summary><div class="body" id="p-lens"></div></details>
+    <details open><summary>Distort</summary><div class="body" id="p-warp"></div></details>
     <details open><summary>Image</summary><div class="body" id="p-img"></div></details>
     <details open><summary>Crop</summary><div class="body" id="p-crop"></div></details>
     <details><summary>Canvas</summary><div class="body" id="p-doc"></div></details>
@@ -57,7 +59,7 @@
       <p><kbd>← → ↑ ↓</kbd> nudge image 1 px</p><p><kbd>Shift</kbd>+arrows ×10 · <kbd>Alt</kbd>+arrows ×0.1</p>
       <p><kbd>R</kbd> reset image · <kbd>M</kbd> centre image</p><p><kbd>\</kbd> show original / corrected</p>
       <h4>Tools</h4>
-      <p><kbd>V</kbd> move · <kbd>C</kbd> crop</p><p><kbd>Enter</kbd> apply crop · <kbd>Esc</kbd> cancel</p><p><kbd>⌘/Ctrl</kbd>+<kbd>Z</kbd> undo crop</p>
+      <p><kbd>V</kbd> move · <kbd>D</kbd> distort · <kbd>C</kbd> crop</p><p>Distort: drag corner / side · <kbd>Alt</kbd>+side bends</p><p><kbd>Enter</kbd> apply crop · <kbd>Esc</kbd> cancel</p><p><kbd>⌘/Ctrl</kbd>+<kbd>Z</kbd> undo crop</p>
     </div>
     <div>
       <h4>Grid</h4>
@@ -78,6 +80,7 @@
 <script src="js/state.js"></script>
 <script src="js/presets.js"></script>
 <script src="js/actions.js"></script>
+<script src="js/warp.js"></script>
 <script src="js/gl.js"></script>
 <script src="js/images.js"></script>
 <script src="js/grid.js"></script>

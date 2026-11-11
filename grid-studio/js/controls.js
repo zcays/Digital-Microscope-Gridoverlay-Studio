@@ -108,6 +108,13 @@ function buildLensPanel() {
   note(p, 'Positive Strength straightens barrel (fisheye) bowing; negative fixes pincushion. Use the grid as a straight-line reference. Edge falloff fine-tunes the outer corners.');
 }
 
+function buildWarpPanel() {
+  const p = $('#p-warp');
+  buttons(p, [['wTool', 'Distort tool', 'primary', () => setTool('warp')], ['wReset', 'Reset distortion', '', resetWarp]]);
+  checkbox(p, 'Apply distortion', () => S.warp.enabled, v => { S.warp.enabled = v; dirty('gl'); }, 'untick to compare');
+  note(p, 'In the Distort tool (D) drag a corner to move it, drag a side handle to move the whole edge, and hold Alt/Option while dragging a side to bend it. The grid stays fixed; the image bends to meet it.');
+}
+
 function buildImagePanel() {
   const p = $('#p-img'), I = S.img, touch = fn => v => { fn(v); dirty('gl', 'status'); };
   slider(p, 'Position X', () => I.x, touch(v => I.x = v), -2000, 4000, 1);
@@ -158,6 +165,6 @@ function buildChipPanel() {
 }
 
 function buildPanels() {
-  buildGridPanel(); buildChipPanel(); buildLensPanel(); buildImagePanel(); buildCropPanel(); buildDocPanel();
+  buildGridPanel(); buildChipPanel(); buildLensPanel(); buildWarpPanel(); buildImagePanel(); buildCropPanel(); buildDocPanel();
   syncAll();
 }

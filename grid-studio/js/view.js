@@ -10,7 +10,7 @@ function layout() {
   // The grid canvas is rendered at screen resolution so lines stay crisp when zoomed in.
   const k = Math.max(.05, Math.min(z * (window.devicePixelRatio || 1), MAX_DOC / Math.max(w, h)));
   dom.grid.width = Math.max(1, Math.round(w * k)); dom.grid.height = Math.max(1, Math.round(h * k));
-  dirtyFlags.grid = dirtyFlags.crop = true;
+  dirtyFlags.grid = dirtyFlags.crop = dirtyFlags.warp = true;
 }
 
 function setZoom(z) {
