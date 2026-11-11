@@ -17,9 +17,9 @@ function fitImageToCanvas() {
 }
 function nudgeImage(dx, dy) { if (!S.img.el) return; S.img.x += dx; S.img.y += dy; refresh('gl'); }
 
-/* [ ] and { } shortcuts. With a chip ticked the grid size comes from the chip, so [ ] zoom the grid and { } do nothing. */
+/* [ ] and { } shortcuts. With a chip ticked the grid size comes from the chip, so both do nothing then. */
 function nudgeGridSize(d) {
-  if (S.chip.id) return setChipZoom(S.chip.zoom + d * 5);
+  if (S.chip.id) return;
   S.grid.size = Math.max(1, S.grid.size + d); refresh('grid');
 }
 function nudgeGridSpacing(d) { if (S.chip.id) return; const g = S.grid; g.gapX = g.gapY = Math.max(0, g.gapX + d); refresh('grid'); }

@@ -66,7 +66,7 @@ Press `?` (or `H`) in the app to see this list. On Mac use `⌘` where it says `
 | `R` / `M` | Reset the image position, scale and rotation / centre the image |
 | `\` | Show the original / fisheye-corrected image (before / after) |
 | `G` | Show or hide the grid |
-| `[` `]` | Square size − / + (grid zoom − / + when a chip version is ticked) |
+| `[` `]` | Square size − / + (manual grid only) |
 | `{` `}` | Grid spacing − / + (manual grid only) |
 | `+` `-` | Zoom the view in / out |
 | `F` or `0` / `1` | Fit the canvas to the window / 100% |

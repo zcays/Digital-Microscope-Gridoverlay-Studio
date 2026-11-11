@@ -8,7 +8,7 @@
  *        (well px = well µm × k, pitch px = pitch µm × k), so well : wall : pitch proportions are always exact.
  *        Two modes: S.chip.fit (canvas = array + dead-room border, the default) or tile across a fixed canvas.
  * IMAGE: umPerPx() = the image's µm per pixel. keepingImageScale() keeps it constant when the grid scale/chip changes
- *        (the microscope doesn't change), so changing chips or grid zoom rescales the image along with the grid.
+ *        (the microscope doesn't change), so changing chips rescales the image along with the grid.
  * Draft angle, bottom shape and depth are NOT drawn (2-D top view only). */
 
 const CHIPS = [
@@ -26,8 +26,8 @@ const CHIPS = [
   {id: 'V15.2',     shape: 'square', bottom: 'draft angle 5%',  draft: 5,    pitch: 100, well: 50,  wall: 50, depth: 100, widthUm: 10000, lengthUm: 10000, wide: 100, long: 100},
 ];
 
-const AUTO_PITCH_PX = 48;                   // fill-plane mode: at 100 % grid zoom one well pitch is this many canvas px
-const FIT_TARGET_PX = 2000;                 // fit-canvas mode: at 100 % grid zoom the array's longer side is about this many px
+const AUTO_PITCH_PX = 48;                   // tiled (not fit) mode: one well pitch is drawn this many canvas px wide
+const FIT_TARGET_PX = 2000;                 // fit-canvas mode: the array's longer side is about this many canvas px
 
 /** Real extent of the N × M array in µm (first well edge to last well edge) and the dead-room border around it. */
 function chipGeometry(P) {
@@ -40,13 +40,7 @@ const activePreset = () => S.chip.id ? CHIPS.find(c => c.id === S.chip.id) : nul
 function pxPerUm() {
   const P = activePreset(); if (!P) return null;
   const base = S.chip.fit ? FIT_TARGET_PX / (chipGeometry(P).longest * 1.16) : AUTO_PITCH_PX / P.pitch;
-  return base * S.chip.zoom / 100;
-}
-/** Largest grid zoom % for which the fitted canvas still fits within MAX_DOC. */
-function maxChipZoom() {
-  const P = activePreset(); if (!P || !S.chip.fit) return 5000;
-  const g = chipGeometry(P), base = FIT_TARGET_PX / (g.longest * 1.16);
-  return Math.floor(100 * MAX_DOC / ((g.longest + 2 * g.borderUm) * base));
+  return base;
 }
 /** Current image calibration in µm per image pixel (null without chip or image). */
 const umPerPx = () => { const k = pxPerUm(); return k && S.img.el ? S.img.scale / k : null; };
@@ -73,10 +67,8 @@ function keepingImageScale(change) {
   refresh('gl', 'grid', 'layout', 'crop', 'status');
 }
 function selectChip(id) { keepingImageScale(() => S.chip.id = id); }
-function setChipZoom(pct) { keepingImageScale(() => S.chip.zoom = clamp(pct, 5, maxChipZoom())); }
 function setChipFit(on) { keepingImageScale(() => S.chip.fit = on); }
 function setChipMargin(pct) { keepingImageScale(() => S.chip.margin = clamp(pct, 0, 40)); }
-function setImageUmPerPx(v) { const k = pxPerUm(); if (!k || !(v > 0)) return; S.img.scale = v * k; dirty('gl', 'status'); }
 
 function updateChipInfo() {
   const el = $('#chipInfo'), P = activePreset();

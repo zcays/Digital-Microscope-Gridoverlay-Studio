@@ -41,8 +41,8 @@ frame.onload = () => setTimeout(async () => {
   test('unticking a chip restores the canvas size', () => E('S.doc.w') === 1200 && E('S.doc.h') === 800);
 
   // ---- image µm/px is preserved when the grid scale changes ----
-  test('µm/px stays constant when grid zoom changes', () => {
-    E("selectChip('V3.1')"); const u = E('umPerPx()'); E('setChipZoom(250)'); const u2 = E('umPerPx()'); E('selectChip(null)'); return near(u, u2, 1e-9);
+  test('µm/px stays constant when the grid scale changes (fit toggle)', () => {
+    E("selectChip('V3.1')"); const u = E('umPerPx()'); E('setChipFit(false)'); const u2 = E('umPerPx()'); E('setChipFit(true); selectChip(null)'); return near(u, u2, 1e-9);
   });
 
   // ---- distortion maths ----

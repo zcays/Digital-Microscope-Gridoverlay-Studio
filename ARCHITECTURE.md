@@ -59,7 +59,7 @@ View zoom (`S.zoom`) is separate: screen px per canvas px. It never affects the 
 **True-to-scale grid.** With a chip ticked, `well px = well µm × k` and `pitch px = pitch µm × k` with the same `k`,
 so well : wall : pitch proportions are always exact (verified by `tests.html`). `pitch = well + wall` for every chip.
 
-**Image calibration.** `umPerPx() = S.img.scale / pxPerUm()`. When the grid scale changes (new chip, grid zoom),
+**Image calibration.** `umPerPx() = S.img.scale / pxPerUm()`. When the grid scale changes (new chip, fit mode on/off),
 `keepingImageScale()` rescales the image so its µm/px stays the same. The user adjusts the image to fit the wells; the
 displayed µm/px is then that microscope's calibration.
 
@@ -119,7 +119,7 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
   erased the image and the PNG contained only the grid. `renderGrid()` does the clearing for the on-screen overlay. `tests.html` guards this.
 * Grid line width = `S.grid.stroke × max(1, canvasWidth / 1200)` (`gridLineWidth()` in `grid.js`) so walls look equally thick on big chip-fit canvases.
 * Outlines are drawn *inset* so a cell's outer size is exactly the well size regardless of line width.
-* Canvas max is `MAX_DOC` = 8192 px; chip fit mode clamps grid zoom so the canvas stays within it.
+* Canvas max is `MAX_DOC` = 8192 px; chip fit mode sizes the canvas to about 2000 px on its longer side, well within it.
 
 ## Verifying a change
 

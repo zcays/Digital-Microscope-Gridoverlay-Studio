@@ -53,8 +53,6 @@ function buildChipPanel() {
   list.querySelectorAll('input').forEach(cb => cb.onchange = () => selectChip(cb.checked ? cb.dataset.id : null));   // ticking one unticks the others
 
   const tools = document.createElement('div'); p.append(tools);       // greyed out until a chip is ticked
-  slider(tools, 'Grid zoom %', () => S.chip.zoom, v => setChipZoom(v), 10, 1000, 1);
-  slider(tools, 'Image µm/px', () => umPerPx() || 0, setImageUmPerPx, 0.1, 40, .01);
   checkbox(tools, 'Fit canvas to array', () => S.chip.fit, setChipFit, 'canvas = the N × M wells + border');
   slider(tools, 'Dead room %', () => S.chip.margin, setChipMargin, 0, 40, 1);
   const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);   // filled by updateChipInfo()

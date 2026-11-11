@@ -41,7 +41,7 @@ const S = {
     offX: 0, offY: 0, cols: 0, rows: 0,     // offsets shift the grid; cols/rows 0 = as many as fit
     radius: 0, stroke: 2,                   // stroke = outline thickness in px for a 1200 px wide canvas (scaled up on bigger canvases)
   },
-  chip: {id: null, zoom: 100, fit: true, margin: 8, savedDoc: null},   // ticked chip version; null id = manual grid
+  chip: {id: null, fit: true, margin: 8, savedDoc: null},   // ticked chip version; null id = manual grid
   zoom: 1,                                  // VIEW zoom (screen px per canvas px). Does not change the document.
   tool: 'move', crop: null, ratio: 0, cursor: null,
 };
