@@ -18,7 +18,7 @@ function setImage(src) {
   src = downscaleToFit(src, Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), MAX_DOC));
   const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
   uploadTexture(src);
-  Object.assign(S.img, {el: src, w, h}, defaultImageTransform());
+  Object.assign(S.img, {el: src, w, h, crop: null}, defaultImageTransform());
   Object.assign(S.lens, defaultLens());
   S.doc = {w, h}; S.crop = null; undoStack.length = 0;
   dom.emptyHint.style.display = 'none';

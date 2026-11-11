@@ -1,7 +1,9 @@
 'use strict';
-/* crop.js — the Crop tool. Rects are {x, y, w, h} in canvas px.
- * "Applying" a crop does not touch image pixels: it shifts S.img.x/y and shrinks S.doc, so the selection
- * becomes the new canvas. Undo restores the previous doc size and image position (undoStack).
+/* crop.js — the Crop tool. The selection rect {x, y, w, h} is in canvas px while you draw it.
+ * IMPORTANT: cropping affects ONLY THE IMAGE. "Applying" converts the rect to image pixels and stores it in S.img.crop; gl.js
+ * then hides everything outside it. The canvas size (S.doc), the grid and the chip scale are never changed by a crop.
+ * The crop is non-destructive (Reset crop / Undo bring the picture back) and moves with the image.
+ * For a rotated image the stored crop is the bounding box of the selection (crop before rotating for an exact rectangle).
  * Registers TOOLS.crop and the cropNew / cropMove / cropResize drag types at the bottom of this file. */
 
 const rectHasArea = r => r && r.w >= 1 && r.h >= 1;
@@ -61,18 +63,31 @@ function startCrop() {
 }
 function cancelCrop() { S.crop = null; setTool('move'); }
 
-function applyCrop() {
-  const c = S.crop; if (!rectHasArea(c)) return;
-  undoStack.push({doc: {...S.doc}, x: S.img.x, y: S.img.y});
-  S.img.x -= Math.round(c.x); S.img.y -= Math.round(c.y);          // shift image so the crop becomes the new origin
-  S.doc = {w: Math.max(1, Math.round(c.w)), h: Math.max(1, Math.round(c.h))};
-  S.crop = null; setTool('move'); afterDocChange();
+/** Convert a rect drawn on the canvas into image pixels (undo translate, rotate, scale). Rotated images get the bounding box. */
+function canvasRectToImageRect(r) {
+  const I = S.img, a = -I.rot * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const cx = I.x + I.w * I.scale / 2, cy = I.y + I.h * I.scale / 2;                  // image centre on the canvas
+  const pts = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]].map(([x, y]) => {
+    const dx = x - cx, dy = y - cy;
+    return [(c * dx - s * dy) / I.scale + I.w / 2, (s * dx + c * dy) / I.scale + I.h / 2];
+  });
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), x = Math.min(...xs), y = Math.min(...ys);
+  return {x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y};
 }
+
+function setImageCrop(crop) {
+  undoStack.push({crop: S.img.crop ? {...S.img.crop} : null});
+  S.img.crop = crop; S.crop = null; updateUndoButton(); refresh('gl', 'crop');
+}
+function applyCrop() {
+  const c = S.crop; if (!rectHasArea(c) || !S.img.el) return;
+  setImageCrop(canvasRectToImageRect(c)); setTool('move');
+}
+function resetCrop() { if (S.img.crop) setImageCrop(null); }                          // un-crop (undoable)
 function undoCrop() {
   const u = undoStack.pop(); if (!u) return;
-  S.doc = u.doc; S.img.x = u.x; S.img.y = u.y; S.crop = null; afterDocChange();
+  S.img.crop = u.crop; S.crop = null; updateUndoButton(); refresh('gl', 'crop');
 }
-function afterDocChange() { updateUndoButton(); fitZoom(); refresh('gl', 'layout', 'crop', 'status'); }
 function updateUndoButton() { $('#undo').disabled = !undoStack.length; }
 
 /** Position the on-canvas selection box and refresh the panel readout. */

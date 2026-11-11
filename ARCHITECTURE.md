@@ -5,7 +5,7 @@ dependencies, no server logic. It lays a to-scale grid (the wells of a microflui
 photo so the photo can be corrected (fisheye, distortion, crop) until it lines up with the grid.
 
 Run it: open `grid-studio/index.html`, or `python3 -m http.server 8765 --directory grid-studio`.
-Check it: open `grid-studio/tests.html` (should say **PASS**, 69/69 at the time of writing).
+Check it: open `grid-studio/tests.html` (should say **PASS**).
 
 ## The idea in one minute
 
@@ -35,7 +35,7 @@ Check it: open `grid-studio/tests.html` (should say **PASS**, 69/69 at the time 
 | `images.js` | Load file / paste / drop, built-in fisheye sample, `setImage()` (reset-everything entry point) | change what happens on image load |
 | `grid.js` | `gridLayout()` (where cells go) and `drawGrid()` (draws them; also used for export) | change grid geometry or look |
 | `view.js` | Stage size, view zoom, pointer→canvas coords, status bar, µm scale bar | change zoom or status readouts |
-| `crop.js` | Crop tool: rect maths, apply / undo, crop box, its drag types | change cropping |
+| `crop.js` | Crop tool: selection maths, canvas→image rect conversion, apply / undo / reset, crop box, its drag types | change cropping |
 | `ui.js` | Widget helpers: `slider`, `checkbox`, `buttons`, `line`, `note`, `setter`, `KEY_STEP` | add a new kind of control |
 | `panels.js` | Builds the right-hand panels from the widgets | add a slider / setting |
 | `tools.js` | Active tool, `setTool`, mouse/touch dispatch, pan + image-move drags | add a tool |
@@ -68,6 +68,11 @@ on untick (`S.chip.savedDoc`); otherwise the grid tiles across the existing canv
 **Image pipeline (gl.js).** Pass 1 (fragment shader, inverse mapping): translate/scale/rotate then radial lens
 correction `r' = r(1 − k1 r² − k2 r⁴)`. Pass 2 (only if the distortion is not identity): the pass-1 result is drawn on a
 32×32 mesh whose vertices come from a biquadratic patch over 3×3 control points (`warp.js`). Premultiplied alpha.
+
+**Crop only affects the image.** `S.img.crop` is a rect in *image* pixels (null = uncropped). The Crop tool lets you draw on the
+canvas, converts that rect to image pixels (`canvasRectToImageRect`) and `gl.js` masks everything outside it in the corrected-image
+space. It never changes `S.doc`, the grid or the chip scale, and it moves/scales/rotates with the image. Non-destructive: Reset crop /
+Undo restore the full picture. (For a rotated image the stored rect is the bounding box of the selection.)
 
 **Registries instead of a big switch.** A tool = an entry in `TOOLS` (`cursor`, optional `enter`, `pick(e,p)` → drag name).
 A drag = an entry in `dragTypes` (`start`, `move`, optional `end`). `tools.js` only dispatches. Crop and Distort register
@@ -102,13 +107,13 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 
 ## Verifying a change
 
-1. Open `tests.html` → must show `PASS` (69/69). Add a test there for new maths.
+1. Open `tests.html` → must show `PASS`. Add a test there for new maths.
 2. Open the app, **Load sample**, exercise the feature, check the browser console for errors.
 3. For anything visual, look at it (zoom 100%): the tests do not check pixels.
 
 ## Known limits / ideas
 
-* Only crop has undo. No project save/load. Fisheye is one radial model, not a per-lens profile.
+* Only crop has undo (it restores the previous image crop). No project save/load. Fisheye is one radial model, not a per-lens profile.
 * Chip draft angle, bottom shape and depth are listed but not drawn (top view only). The table's "well size" is drawn
   as given (assumed to be the top opening).
 * Table quirk: V10.2 and V12 list well counts one lower than array size ÷ pitch (66 vs 66.7; 49 vs 50).

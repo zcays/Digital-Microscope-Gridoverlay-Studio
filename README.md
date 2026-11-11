@@ -46,7 +46,7 @@ If the page is blank, check that WebGL is enabled in your browser settings.
 - Distort tool (`D`): drag the 4 corners, drag a side to move the whole edge, Alt-drag a side to bend it; the grid stays fixed
 - Fisheye (barrel / pincushion) correction with lens centre, plus before/after toggle
 - Move, scale and rotate the image; arrow-key nudging
-- Crop tool with aspect presets and undo
+- Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back)
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
 - PNG export of image + grid
 
@@ -68,7 +68,7 @@ Press `?` (or `H`) in the app to see this list. On Mac use `⌘` where it says `
 | `Space` + drag | Pan the view (or middle-mouse drag) |
 | `Ctrl` + wheel | Zoom the view |
 | `Enter` / `Esc` | Apply / cancel a crop (`Esc` also leaves the Distort tool) |
-| `Ctrl+Z` | Undo the last crop |
+| `Ctrl+Z` | Undo the last crop (image only) |
 | `Ctrl+O` / `Ctrl+E` | Open an image / export PNG |
 | `?` or `H` | Show the shortcut list |
 

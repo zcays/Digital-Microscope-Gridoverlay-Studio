@@ -101,9 +101,9 @@ function buildCropPanel() {
   const p = $('#p-crop');
   line(p, 'Aspect', `<select id="cRatio">${ASPECTS.map(([t, v]) => `<option value="${v}">${t}</option>`).join('')}</select>`);
   $('#cRatio').onchange = e => { S.ratio = +e.target.value; const r = ratioValue(); if (S.crop && r) { fitRatio(r); dirty('crop'); } };
-  buttons(p, [['cStart', 'Crop tool', '', () => setTool('crop')], ['cropApply', 'Apply crop', 'primary', applyCrop], ['cCancel', 'Cancel', '', cancelCrop]]);
+  buttons(p, [['cStart', 'Crop tool', '', () => setTool('crop')], ['cropApply', 'Apply crop', 'primary', applyCrop], ['cCancel', 'Cancel', '', cancelCrop], ['cReset', 'Reset crop', '', resetCrop]]);
   note(p, '', 'cropInfo');                                            // text set by updateCrop()
-  note(p, 'Drag to draw, drag handles to resize, Enter to apply, Esc to cancel, ⌘/Ctrl+Z to undo.');
+  note(p, 'Crop only trims the image — the canvas and the grid never change. Drag to draw, drag handles to resize, Enter to apply, Esc to cancel, ⌘/Ctrl+Z to undo, Reset crop to bring the whole image back.');
 }
 
 function buildDocPanel() {

@@ -65,8 +65,19 @@ frame.onload = () => setTimeout(() => {
   });
 
   // ---- crop ----
-  test('crop apply shrinks the canvas, undo restores it', () => {
-    E("setTool('crop'); S.crop = {x: 100, y: 100, w: 600, h: 400}; applyCrop()"); const a = E('S.doc.w') === 600 && E('S.doc.h') === 400; E('undoCrop()'); return a && E('S.doc.w') === 1200;
+  test('crop only masks the image: canvas and grid are unchanged, undo/reset restore it', () => {
+    const grid0 = JSON.stringify(E('gridLayout(S.doc.w, S.doc.h)')), doc0 = E('[S.doc.w, S.doc.h]').join('x');
+    E("setTool('crop'); S.crop = {x: 100, y: 100, w: 600, h: 400}; applyCrop()");
+    const c = E('S.img.crop');
+    const masked = c && near(c.x, 100) && near(c.y, 100) && near(c.w, 600) && near(c.h, 400);      // image at scale 1, no rotation → same numbers
+    const same = JSON.stringify(E('gridLayout(S.doc.w, S.doc.h)')) === grid0 && E('[S.doc.w, S.doc.h]').join('x') === doc0;
+    E('undoCrop()'); const undone = E('S.img.crop') === null;
+    E("S.crop = {x: 0, y: 0, w: 300, h: 300}; applyCrop(); resetCrop()"); const reset = E('S.img.crop') === null;
+    return masked && same && undone && reset;
+  });
+  test('crop rect maps through image scale and position', () => {
+    E('S.img.scale = 2; S.img.x = 50; S.img.y = 20'); const r = E('canvasRectToImageRect({x: 250, y: 120, w: 400, h: 200})');
+    E('resetImageTransform()'); return near(r.x, 100) && near(r.y, 50) && near(r.w, 200) && near(r.h, 100);
   });
 
   const bad = results.filter(r => !r[1]);

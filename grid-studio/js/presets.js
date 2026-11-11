@@ -59,9 +59,7 @@ function applyChipCanvas() {
     const g = chipGeometry(P), k = pxPerUm();
     S.doc = {w: clamp(Math.round((g.extX + 2 * g.borderUm) * k), 16, MAX_DOC), h: clamp(Math.round((g.extY + 2 * g.borderUm) * k), 16, MAX_DOC)};
   } else if (C.savedDoc) { S.doc = C.savedDoc; C.savedDoc = null; }
-  const changed = before !== `${S.doc.w}x${S.doc.h}`;
-  if (changed) { undoStack.length = 0; updateUndoButton(); }
-  return changed;
+  return before !== `${S.doc.w}x${S.doc.h}`;
 }
 
 /** Run `change`, keep the image's µm-per-pixel (the microscope doesn't change), then refit the canvas. */
