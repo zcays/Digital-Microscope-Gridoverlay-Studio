@@ -90,7 +90,7 @@ function buildImagePanel() {
   const p = $('#p-img'), I = S.img, set = fn => setter(['gl', 'status'], fn);   // 'status' refreshes the chip µm/px readout
   slider(p, 'Position X', () => I.x, set(v => I.x = v), -2000, 4000, 1);
   slider(p, 'Position Y', () => I.y, set(v => I.y = v), -2000, 4000, 1);
-  slider(p, 'Scale %', () => I.scale * 100, set(v => I.scale = Math.max(1, v) / 100), 10, 400, .5);
+  slider(p, 'Scale %', () => I.scale * 100, set(v => I.scale = Math.max(1, v) / 100), 10, 400, .1);
   slider(p, 'Rotate °', () => I.rot, set(v => I.rot = v), -180, 180, .1);
   buttons(p, [['iCenter', 'Centre', '', centerImage], ['iFit', 'Fit to canvas', '', fitImageToCanvas], ['iReset', 'Reset', '', resetImageTransform]]);
   note(p, 'Arrow keys nudge the image 1 px (Shift = 10 px). Or drag with the Move tool.');

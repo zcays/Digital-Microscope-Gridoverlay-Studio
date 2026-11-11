@@ -14,7 +14,7 @@ const KEY_STEP = {
   'Offset X': 1, 'Offset Y': 1, 'Columns (0=auto)': 1, 'Rows (0=auto)': 1, 'Corner radius': 1, 'Line width': .5, 'Opacity %': 5,
   'Grid zoom %': 5, 'Dead room %': 1, 'Image µm/px': .05,
   'Strength': .01, 'Edge falloff': .01, 'Centre X %': 1, 'Centre Y %': 1,
-  'Position X': 1, 'Position Y': 1, 'Scale %': 1, 'Rotate °': .5, 'Width px': 10, 'Height px': 10,
+  'Position X': 1, 'Position Y': 1, 'Scale %': .1, 'Rotate °': .5, 'Width px': 10, 'Height px': 10,
 };
 const ARROW_DIR = {ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1};
 const decimalsOf = n => n < 1 ? Math.ceil(-Math.log10(n)) : 0;
