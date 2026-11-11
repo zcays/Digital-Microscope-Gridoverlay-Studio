@@ -50,6 +50,34 @@ If the page is blank, check that WebGL is enabled in your browser settings.
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
 - PNG export of image + grid
 
+## Keyboard shortcuts
+
+Press `?` (or `H`) in the app to see this list. On Mac use `⌘` where it says `Ctrl`.
+
+| Key | Action |
+|---|---|
+| `V` / `D` / `C` | Move tool / Distort tool / Crop tool |
+| `←` `→` `↑` `↓` | Nudge the image 1 px (`Shift` = 10 px, `Alt` = 0.1 px) |
+| `R` / `M` | Reset the image position, scale and rotation / centre the image |
+| `\` | Show the original / fisheye-corrected image (before / after) |
+| `G` | Show or hide the grid |
+| `[` `]` | Square size − / + (grid zoom − / + when a chip version is ticked) |
+| `{` `}` | Grid spacing − / + (manual grid only) |
+| `+` `-` | Zoom the view in / out |
+| `F` or `0` / `1` | Fit the canvas to the window / 100% |
+| `Space` + drag | Pan the view (or middle-mouse drag) |
+| `Ctrl` + wheel | Zoom the view |
+| `Enter` / `Esc` | Apply / cancel a crop (`Esc` also leaves the Distort tool) |
+| `Ctrl+Z` | Undo the last crop |
+| `Ctrl+O` / `Ctrl+E` | Open an image / export PNG |
+| `?` or `H` | Show the shortcut list |
+
+**Distort tool:** drag a corner to move it, drag a side to move the whole edge, `Alt`-drag a side to bend it.
+
+**Adjusting a setting from the keyboard:** click or `Tab` to a slider or number box, then use the arrow keys to change it by a
+fixed step (e.g. 1 px, 0.01 fisheye strength, 0.5° rotation). `Shift` = ×10, `Alt` = ×0.1. Press `Esc` or click the canvas
+to send the arrow keys back to the image.
+
 ## For developers and AI agents
 
 See **[ARCHITECTURE.md](ARCHITECTURE.md)** (how it works, file map, how to add chips / tools / settings, gotchas) and **[AGENTS.md](AGENTS.md)**.
