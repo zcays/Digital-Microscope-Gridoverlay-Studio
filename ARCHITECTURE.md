@@ -40,7 +40,7 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `panels.js` | Builds the right-hand panels from the widgets | add a slider / setting |
 | `tools.js` | Active tool, `setTool`, mouse/touch dispatch, pan + image-move drags | add a tool |
 | `keyboard.js` | Shortcuts (`KEY_ACTIONS`, `MOD_ACTIONS`), arrow-key rules, help overlay, status hint | add a shortcut |
-| `export.js` | PNG export | change export |
+| `export.js` | `buildExportCanvas()` (image then grid, full resolution) and PNG download | change export |
 | `main.js` | `frame()` loop, top-bar wiring, `init()` | start-up order |
 
 Other files: `index.html` (markup, panel containers, help overlay, script order), `css/style.css`,
@@ -102,6 +102,9 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 * **Comment terminators:** a stray missing `*/` in a file header silently comments out the whole file.
 * **WebGL feedback loops:** pass 1 renders into `fbTexture`; never have it bound as the sampled texture at the same time.
 * **Distort handles** live outside the canvas box, so the stage is `overflow: visible` when `data-tool="warp"` (css).
+* **`drawGrid()` must never clear its canvas.** Export draws the grid on top of the image in one canvas; a `clearRect` inside it once
+  erased the image and the PNG contained only the grid. `renderGrid()` does the clearing for the on-screen overlay. `tests.html` guards this.
+* Grid line width = `S.grid.stroke × max(1, canvasWidth / 1200)` (`gridLineWidth()` in `grid.js`) so walls look equally thick on big chip-fit canvases.
 * Outlines are drawn *inset* so a cell's outer size is exactly the well size regardless of line width.
 * Canvas max is `MAX_DOC` = 8192 px; chip fit mode clamps grid zoom so the canvas stays within it.
 

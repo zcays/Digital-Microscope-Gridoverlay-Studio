@@ -64,6 +64,22 @@ frame.onload = () => setTimeout(() => {
     return E('S.img.x') === x && near(E('S.lens.k1') - k, .01, 1e-9);
   });
 
+  // ---- export: must contain the image AND the grid (it once exported only the grid) ----
+  test('export contains image + grid; image-only has no grid; grid-only has no image', () => {
+    E("selectChip(null); S.grid.visible = true; S.grid.mode = 'filled'; S.grid.opacity = 1; S.grid.color = '#ff0000'; S.grid.mode = 'outline'; resetImageTransform(); resetWarp(); S.img.crop = null");
+    const pix = o => { const c = E(`buildExportCanvas(${JSON.stringify(o)})`), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let img = 0, red = 0;
+      for (let i = 0; i < d.length; i += 4) { if (d[i + 3] === 255 && !(d[i] > 200 && d[i + 1] < 60)) img++; if (d[i] > 200 && d[i + 1] < 60 && d[i + 2] < 60 && d[i + 3] > 200) red++; } return {img, red}; };
+    const both = pix({image: true, grid: true}), onlyImg = pix({image: true, grid: false}), onlyGrid = pix({image: false, grid: true});
+    return both.img > 100000 && both.red > 100 && onlyImg.red === 0 && onlyImg.img > 100000 && onlyGrid.img === 0 && onlyGrid.red > 100;
+  });
+  test('grid line width: slider value on a 1200 px canvas, scaled up on bigger canvases', () => {
+    const w = E('S.grid.stroke'); return near(E('gridLineWidth(1200)'), w) && near(E('gridLineWidth(2400)'), 2 * w) && near(E('gridLineWidth(600)'), w) && w === 2;
+  });
+  test('drawGrid paints over existing pixels instead of clearing them', () => {
+    const c = w.document.createElement('canvas'); c.width = 400; c.height = 400; const x = c.getContext('2d'); x.fillStyle = '#00ff00'; x.fillRect(0, 0, 400, 400);
+    E('S.grid.visible = true'); E('drawGrid')(x, 400, 400, 1); const d = x.getImageData(0, 0, 400, 400).data; let green = 0; for (let i = 0; i < d.length; i += 4) if (d[i] === 0 && d[i + 1] === 255 && d[i + 2] === 0) green++; return green > 20000;
+  });
+
   // ---- crop ----
   test('crop only masks the image: canvas and grid are unchanged, undo/reset restore it', () => {
     const grid0 = JSON.stringify(E('gridLayout(S.doc.w, S.doc.h)')), doc0 = E('[S.doc.w, S.doc.h]').join('x');

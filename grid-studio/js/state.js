@@ -39,7 +39,7 @@ const S = {
     size: 12, gapX: 12, gapY: 12,           // px
     mL: 40, mR: 40, mT: 40, mB: 40, center: true,    // dead space around the array
     offX: 0, offY: 0, cols: 0, rows: 0,     // offsets shift the grid; cols/rows 0 = as many as fit
-    radius: 0, stroke: 1,
+    radius: 0, stroke: 2,                   // stroke = outline thickness in px for a 1200 px wide canvas (scaled up on bigger canvases)
   },
   chip: {id: null, zoom: 100, fit: true, margin: 8, savedDoc: null},   // ticked chip version; null id = manual grid
   zoom: 1,                                  // VIEW zoom (screen px per canvas px). Does not change the document.

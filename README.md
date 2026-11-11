@@ -48,7 +48,8 @@ If the page is blank, check that WebGL is enabled in your browser settings.
 - Move, scale and rotate the image; arrow-key nudging
 - Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back)
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
-- PNG export of image + grid
+- PNG export of image + grid (both, or either one) at the full canvas resolution, including fisheye correction, distortion and crop
+- Grid line ("wall") thickness is adjustable (Line width) and scales with the canvas size so it stays clearly visible
 
 ## Keyboard shortcuts
 

@@ -6,6 +6,8 @@
  *                 (S.chip.fit) or tiled across the whole canvas.
  *   no chip     → manual sliders: size, gaps, dead-space margins, cols/rows.
  * gridLayout() returns {shape, size, pitchX, pitchY, i0..i1, j0..j1, x0, y0} in canvas px; cell (i,j) is at x0+i·pitchX, y0+j·pitchY.
+ * Line width: S.grid.stroke × max(1, canvasWidth/1200) — see gridLineWidth().
+ * drawGrid() never clears (it paints over what is there); renderGrid() clears the overlay canvas first.
  * Outlines are drawn INSET so the outer edge of a cell is always exactly `size` (stroke width never changes the geometry). */
 
 const MAX_CELLS = 400000;
@@ -46,15 +48,20 @@ function gridLayout(w, h) {
   };
 }
 
-/** Draw the grid for a w×h canvas onto ctx; k = canvas pixels per document pixel. */
+/** Outline thickness in canvas px. The slider value is for a 1200 px wide canvas and grows with bigger canvases
+ *  (chip-fit canvases are ~2000 px), so the walls look equally thick whatever the canvas size. */
+const GRID_REF_WIDTH = 1200;
+const gridLineWidth = w => S.grid.stroke * Math.max(1, w / GRID_REF_WIDTH);
+
+/** Draw the grid for a w×h canvas onto ctx; k = canvas pixels per document pixel.
+ *  Does NOT clear the canvas: it draws on top of whatever is there (export relies on this). renderGrid() clears first. */
 function drawGrid(ctx, w, h, k) {
-  ctx.clearRect(0, 0, w * k, h * k);
   const G = S.grid; if (!G.visible) return;
   const L = gridLayout(w, h); if (!L) return;
   if ((L.i1 - L.i0) * (L.j1 - L.j0) > MAX_CELLS) return toast('Too many cells — zoom the grid in or raise the size');
 
   const filled = G.mode === 'filled', circle = L.shape === 'circle';
-  const lineW = filled ? 0 : Math.min(G.stroke, L.size / 2), inset = lineW / 2, side = L.size - lineW;
+  const lineW = filled ? 0 : Math.min(gridLineWidth(w), L.size / 2), inset = lineW / 2, side = L.size - lineW;
   const radius = Math.min(G.radius, side / 2), rounded = !circle && radius > 0 && typeof ctx.roundRect === 'function';
 
   ctx.save(); ctx.scale(k, k); ctx.globalAlpha = G.opacity; ctx.beginPath();
@@ -69,4 +76,8 @@ function drawGrid(ctx, w, h, k) {
   ctx.restore();
 }
 
-function renderGrid() { drawGrid(dom.grid.getContext('2d'), S.doc.w, S.doc.h, dom.grid.width / S.doc.w); }
+function renderGrid() {
+  const ctx = dom.grid.getContext('2d');
+  ctx.clearRect(0, 0, dom.grid.width, dom.grid.height);
+  drawGrid(ctx, S.doc.w, S.doc.h, dom.grid.width / S.doc.w);
+}

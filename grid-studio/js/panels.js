@@ -33,7 +33,7 @@ function buildGridPanel() {
   slider(p, 'Offset X', () => G.offX, set(v => G.offX = v), -2000, 2000, 1);
   slider(p, 'Offset Y', () => G.offY, set(v => G.offY = v), -2000, 2000, 1);
   slider(p, 'Corner radius', () => G.radius, set(v => G.radius = Math.max(0, v)), 0, 50, 1);
-  slider(p, 'Line width', () => G.stroke, set(v => G.stroke = Math.max(.25, v)), .5, 10, .25);
+  slider(p, 'Line width', () => G.stroke, set(v => G.stroke = Math.max(.25, v)), .5, 12, .25);
   slider(p, 'Opacity %', () => G.opacity * 100, set(v => G.opacity = clamp(v, 0, 100) / 100), 0, 100, 1);
 
   const swatches = ['#ffffff', '#000000', '#ff3b30', '#34c759', '#00e5ff', '#ffd60a', '#ff2dff'];
