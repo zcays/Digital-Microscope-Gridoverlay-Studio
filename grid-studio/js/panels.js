@@ -55,6 +55,8 @@ function buildChipPanel() {
   const tools = document.createElement('div'); p.append(tools);       // greyed out until a chip is ticked
   checkbox(tools, 'Fit canvas to array', () => S.chip.fit, setChipFit, 'canvas = the N × M wells + border');
   slider(tools, 'Dead room %', () => S.chip.margin, setChipMargin, 0, 40, 1);
+  buttons(tools, [['afRun', 'Auto-fit image to grid', 'primary', autoFit], ['afUndo', 'Undo auto-fit', '', undoAutoFit]]);
+  note(tools, 'Finds the wells in the photo and sets tilt, size, position, fisheye and distortion for you. Fine-tune afterwards if needed.', 'autoFitInfo');
   const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);   // filled by updateChipInfo()
   note(p, 'Tick a version: the grid takes its shape, well size and pitch from the table, true to scale, and the canvas is sized to the real array plus a border. Then move / scale / rotate the image until it lines up with the wells — the µm/px readout is your image\'s calibration. Untick for the manual grid.');
 
@@ -63,6 +65,7 @@ function buildChipPanel() {
     tools.classList.toggle('off', !S.chip.id); tools.inert = !S.chip.id;
     const manual = $('#gridManual'); manual.classList.toggle('off', !!S.chip.id); manual.inert = !!S.chip.id;
     updateChipInfo();
+    $('#afRun').disabled = !S.chip.id || !S.img.el; $('#afUndo').disabled = !afUndoState;
   });
 }
 
