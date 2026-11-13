@@ -113,6 +113,7 @@ frame.onload = () => setTimeout(async () => {
       identity: '', lens: 'S.lens.k1 = .25; S.lens.k2 = .05', rotate: 'S.img.rot = 12; S.img.x = 40; S.img.scale = .9',
       crop: 'S.img.crop = {x: 200, y: 100, w: 700, h: 500}', warp: 'S.warp.c.se = {x: .92, y: .88}; S.warp.dev.w = {x: -.03, y: 0}',
       combined: 'S.lens.k1 = .2; S.img.rot = -6; S.warp.c.ne = {x: .95, y: .05}',
+      fineMesh: 'S.warp.c.sw = {x: .03, y: .97}; S.warp.mesh = {n: 17, d: Array.from({length: 2 * 17 * 17}, (_, k) => .006 * Math.sin(k * .37))}',
     };
     const reset = 'resetLens(); resetImageTransform(); resetWarp(); S.img.crop = null';
     const snap = () => { const t = document.createElement('canvas'); t.width = E('S.doc.w'); t.height = E('S.doc.h'); const x = t.getContext('2d'); x.drawImage(E('dom.gl'), 0, 0, t.width, t.height); return x.getImageData(0, 0, t.width, t.height).data; };
@@ -133,7 +134,7 @@ frame.onload = () => setTimeout(async () => {
   const w3 = f3.contentWindow, E3 = code => w3.eval(code);
   E3(`
     // an ideal chip (dark walls, bright wells, some glints), rotated, then pushed through a barrel (fisheye) distortion + noise
-    window.makeChipPhoto = (chipId, {W = 1500, H = 1125, fill = .8, angle = 3, barrel = .08, noise = 18, seed = 1} = {}) => {
+    window.makeChipPhoto = (chipId, {W = 1500, H = 1125, fill = .8, angle = 3, barrel = .08, noise = 18, seed = 1, bulge = 0} = {}) => {
       const P = CHIPS.find(c => c.id === chipId); let rnd = seed; const rand = () => { rnd = (rnd * 1664525 + 1013904223) % 4294967296; return rnd / 4294967296; };
       const SW = Math.round(W * 1.4), SH = Math.round(H * 1.4), sc = document.createElement('canvas'); sc.width = SW; sc.height = SH; const x = sc.getContext('2d');
       x.fillStyle = '#2b3a38'; x.fillRect(0, 0, SW, SH);
@@ -147,6 +148,13 @@ frame.onload = () => setTimeout(async () => {
       }
       x.setTransform(1, 0, 0, 1, 0, 0);
       const out = barrelDistort(sc, W, H, barrel), o = out.getContext('2d'), d = o.getImageData(0, 0, W, H);
+      if (bulge) {                                                 // local, smooth displacement of up to bulge × pitch (a warped chip)
+        const src = new Uint8ClampedArray(d.data), amp = bulge * pitch;
+        for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
+          const sx = Math.round(xx + amp * Math.sin(2 * Math.PI * y / H * 1.5) * Math.sin(Math.PI * xx / W)), sy = Math.round(y + amp * Math.sin(2 * Math.PI * xx / W * 1.5) * Math.sin(Math.PI * y / H));
+          const t = (y * W + xx) * 4, f = (Math.min(H - 1, Math.max(0, sy)) * W + Math.min(W - 1, Math.max(0, sx))) * 4; d.data[t] = src[f]; d.data[t + 1] = src[f + 1]; d.data[t + 2] = src[f + 2]; d.data[t + 3] = 255;
+        }
+      }
       for (let i = 0; i < d.data.length; i += 4) { const n = (rand() - .5) * 2 * noise; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; }
       o.putImageData(d, 0, 0); return out;
     };
@@ -160,7 +168,7 @@ frame.onload = () => setTimeout(async () => {
     window.fitSynthetic = (chipId, opts, tick = chipId) => {
       setImage(makeChipPhoto(chipId, opts)); selectChip(null); selectChip(tick); resetLens(); resetWarp();
       const before = alignmentContrast(), r = autoFitNow();
-      return {ok: r.ok, reason: r.reason || '', before, after: r.ok ? alignmentContrast() : null, rot: S.img.rot, k1: S.lens.k1, median: r.stats ? r.stats.medianWell : null, ms: r.stats ? r.stats.ms : 0};
+      return {ok: r.ok, reason: r.reason || '', before, after: r.ok ? alignmentContrast() : null, rot: S.img.rot, k1: S.lens.k1, median: r.stats ? r.stats.medianWell : null, handlesOnly: r.stats ? r.stats.medianHandlesOnly / r.stats.harmonic : null, mesh: !!S.warp.mesh, sides: r.stats ? r.stats.sideErr : null, ms: r.stats ? r.stats.ms : 0};
     };
   `);
   const fitCases = [
@@ -174,6 +182,18 @@ frame.onload = () => setTimeout(async () => {
     const turn = Math.round(opts.angle / 90) * 90, wantRot = -(opts.angle - turn) + (turn ? 90 : 0);       // a 90°-turned photo is turned back by +90
     test(`auto-fit ${chip} tilt ${opts.angle}° fisheye ${opts.barrel}: aligned in the rendered picture (contrast ${r.before.toFixed(2)} → ${r.after === null ? 'refused: ' + r.reason : r.after.toFixed(2)}, ${r.ms} ms)`,
       () => r.ok && r.after > .12 && Math.abs(r.before) < .05 && Math.abs(r.rot - wantRot) < .3 && r.k1 > .3 * opts.barrel && r.median < .04);
+  }
+  { // fine distortion mesh + "Auto-fix distortion"
+    const b = E3(`fitSynthetic('V12', {angle: 2, barrel: .06, bulge: .45})`);
+    test(`auto-fit with a local bulge the 8 handles cannot follow: fine mesh brings the error from ${b.handlesOnly === null ? '?' : (b.handlesOnly * 100).toFixed(0)}% to ${b.median === null ? '?' : (b.median * 100).toFixed(0)}% of a well (worst side ${b.sides ? (Math.max(...Object.values(b.sides)) * 100).toFixed(0) : '?'}%)`,
+      () => b.ok && b.mesh && b.median < .035 && b.handlesOnly > 2 * b.median && Math.max(...Object.values(b.sides)) < .08 && b.after > .15);
+    const only = E3(`(() => { const img = JSON.stringify([S.img.x, S.img.y, S.img.rot, S.img.scale, S.lens.k1]); resetWarp(); const r = autoFitNow(true); return {ok: r.ok, same: img === JSON.stringify([S.img.x, S.img.y, S.img.rot, S.img.scale, S.lens.k1]), mesh: !!S.warp.mesh, median: r.stats && r.stats.medianWell, contrast: alignmentContrast()}; })()`);
+    test('auto-fix distortion re-creates handles + mesh without touching tilt / size / position / lens', () => only.ok && only.same && only.mesh && only.median < .035 && only.contrast > .15);
+    const half = E3(`(() => { const L = gridLayout(S.doc.w, S.doc.h); S.img.x += L.pitchX / 2; S.img.y += L.pitchY / 2; const w0 = JSON.stringify(S.warp), r = autoFitNow(true); const out = {ok: r.ok, reason: r.reason, same: w0 === JSON.stringify(S.warp)}; S.img.x -= L.pitchX / 2; S.img.y -= L.pitchY / 2; return out; })()`);
+    test('auto-fix distortion refuses when the image sits half a well off (asks for Auto-fit first) and changes nothing', () => !half.ok && half.same && /Auto-fit/.test(half.reason));
+    const whole = E3(`(() => { const L = gridLayout(S.doc.w, S.doc.h); S.img.x += L.pitchX; const w0 = JSON.stringify(S.warp), r = autoFitNow(true); const out = {ok: r.ok, reason: r.reason, same: w0 === JSON.stringify(S.warp)}; S.img.x -= L.pitchX; return out; })()`);
+    test(`auto-fix distortion refuses when the image sits one whole well off (would lock one column out): "${(whole.reason || '').slice(0, 50)}…"`, () => !whole.ok && whole.same && /well\(s\) away/.test(whole.reason));
+    test('fine mesh maths: offset at a node is that node, Reset distortion clears the mesh', () => E3(`(() => { resetWarp(); const d = new Array(2 * 17 * 17).fill(0); d[2 * (5 * 17 + 3)] = .01; d[2 * (5 * 17 + 3) + 1] = -.02; S.warp.mesh = {n: 17, d}; const o = warpMeshOffset(S.warp.mesh, 3 / 16, 5 / 16), p = warpPoint(3 / 16, 5 / 16), act = warpActive(); resetWarp(); return Math.abs(o.x - .01) < 1e-9 && Math.abs(o.y + .02) < 1e-9 && act && Math.abs(p.x - 3 / 16 - .01) < 1e-9 && S.warp.mesh === null && !warpActive(); })()`));
   }
   { // must refuse rather than guess
     const blank = E3(`(() => { const c = document.createElement('canvas'); c.width = 1200; c.height = 900; const x = c.getContext('2d'); const g = x.createLinearGradient(0, 0, 1200, 900); g.addColorStop(0, '#234'); g.addColorStop(1, '#9ab'); x.fillStyle = g; x.fillRect(0, 0, 1200, 900); setImage(c); selectChip(null); selectChip('V12'); const before = JSON.stringify([S.img.rot, S.img.scale, S.lens.k1, warpActive()]); const r = autoFitNow(); return {ok: r.ok, reason: r.reason, unchanged: before === JSON.stringify([S.img.rot, S.img.scale, S.lens.k1, warpActive()])}; })()`);

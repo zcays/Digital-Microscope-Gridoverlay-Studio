@@ -49,8 +49,10 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 - **Auto-fit (computer vision):** tick the chip version, press **Auto-fit image to grid** (or `A`) and the app finds the wells in the
   photo and sets tilt, size, position, fisheye strength and the distortion handles so the photo lines up with the grid. It reports the
   typical error, refuses (and changes nothing) when it cannot do it reliably, and has **Undo auto-fit**. See "Auto-fit" below.
+- **Auto-fix distortion:** a button in the Distort panel that bends the image onto the grid without touching tilt, size or position.
+  Besides the 8 handles it fills a fine correction mesh that follows local deviations (a warped chip, sides that are slightly off).
 - Grid overlay: square size, horizontal / vertical / combined spacing, dead-space margins, columns/rows, colour, opacity, outline or filled
-- Distort tool (`D`): drag the 4 corners, drag a side to move the whole edge, Alt-drag a side to bend it; the grid stays fixed
+- Distort tool (`D`): drag the 4 corners, drag a side to move the whole edge, Alt-drag a side to bend it; the grid stays fixed. A fine correction mesh (set automatically, no handles) sits on top of these
 - Fisheye (barrel / pincushion) correction with lens centre, plus before/after toggle
 - Move, scale and rotate the image; arrow-key nudging
 - Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back)
@@ -64,6 +66,12 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 2. Click **Auto-fit image to grid** in the Chip version panel, or press `A`. It takes one to a few seconds.
 3. Read the message under the button, e.g. "tilt 2.1° removed, typical error 1.2 px (6% of a well), 94% of the array matched".
    Fine-tune by hand afterwards if you want (arrow keys, Distort tool), or press **Undo auto-fit**.
+
+**Auto-fix distortion** (Distort panel) does only the bending part: it keeps your tilt, size and position and re-fits the 8 distortion
+handles plus a fine correction mesh underneath them. Auto-fit already runs it as its last step, so use the button after you have moved
+handles or the image by hand and want the distortion redone. The image must already be roughly on the grid (within about a third of a
+well, and not a whole well off); otherwise it tells you to run Auto-fit first. **Reset distortion** clears the handles and the fine mesh.
+The message reports the typical error before and after the fine correction and the worst side.
 
 What it needs: the **whole well array in the picture**, wells at least about 5 px across in the photo, and the **right chip version
 ticked** (it uses that version's well count to find the array's edges). It works with dark or bright walls, a tilted or keystoned

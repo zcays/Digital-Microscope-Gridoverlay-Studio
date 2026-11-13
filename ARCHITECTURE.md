@@ -80,7 +80,9 @@ full-quality frame ~250 ms later; export always uses full quality. **Any change 
 
 **Image pipeline (gl.js).** Pass 1 (fragment shader, inverse mapping): translate/scale/rotate then radial lens
 correction `r' = r(1 − k1 r² − k2 r⁴)`. Pass 2 (only if the distortion is not identity): the pass-1 result is drawn on a
-32×32 mesh whose vertices come from a biquadratic patch over 3×3 control points (`warp.js`). Premultiplied alpha.
+32×32 mesh whose vertices come from `warpPoint()` = a biquadratic patch over 3×3 control points (the 8 handles) plus the optional fine
+mesh `S.warp.mesh` (`warp.js`). The fine mesh has 16 cells per side on purpose: its nodes coincide with vertices of both render meshes
+(32 GPU, 16 software), so the two renderers agree. Premultiplied alpha.
 
 **Crop only affects the image.** `S.img.crop` is a rect in *image* pixels (null = uncropped). The Crop tool lets you draw on the
 canvas, converts that rect to image pixels (`canvasRectToImageRect`) and `gl.js` masks everything outside it in the corrected-image
@@ -103,8 +105,18 @@ matches the ticked chip's grid. Steps, in order:
    step 4 is repeated.
 6. *Polish* on every sample inside the array with wrapped (mod 1) residuals, then edge bows. Only ever started from the coarse
    solution, never from scratch (wrapped residuals alone can slip by a whole wall).
-7. *Refuse rather than guess:* median error > 10% of a period, < 75% of samples matched, or the well pattern continuing beyond the
+7. *Fine mesh.* What the 8 handles cannot follow goes into `S.warp.mesh` (17 × 17 nodes of small canvas offsets, bilinear in between,
+   added to the handle patch inside `warpPoint()` so both renderers and the overlay get it). Each sample says "move the picture here by
+   −error"; a smooth mesh of such moves is solved as a linear least-squares problem per axis (bilinear data term + second-difference
+   smoothness, Huber weights, a few passes because errors are only known mod 1). It is dropped if it does not reduce the error.
+   Stiffness / passes / maximum shift are `AF.meshSmooth`, `AF.meshPasses`, `AF.meshMaxShift`.
+8. *Refuse rather than guess:* median error > 10% of a period, < 75% of samples matched, or the well pattern continuing beyond the
    fitted array (> 55% of the inside level = more wells than the ticked chip) → nothing is changed and the user gets the reason.
+**Auto-fix distortion** (`autoFixDistortion()`, Distort panel) runs the same analysis with `start = {th: current settings}`: tilt, scale,
+position and lens are frozen; the wall numbering is taken from where the user put the image (the typical offset to the absolute line
+indices must be close to a whole number), the handles and a first mesh are fitted from the absolute indices (so a bulge larger than half
+a well is still recovered), then the mod-1 mesh passes polish. Afterwards the array edges are checked: if the image sits a whole well
+off, it refuses instead of locking the picture one column out.
 `afForward()` is a third copy of the image maths (source px → canvas px, i.e. the INVERSE direction of the shader, plus the warp).
 `AF.debug` holds the last run's internals. Works on the raw source pixels, so it ignores the current image settings except the lens centre.
 
@@ -155,6 +167,8 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 
 ## Known limits / ideas
 
+* The fine mesh has no handles: only Auto-fit / Auto-fix distortion write it and only Reset distortion (or Undo) clears it. Dragging a
+  handle keeps the mesh, so a manual tweak after an auto-fix stays a small change on top of it.
 * Auto-fit has been validated on ONE real photo (a V12 chip, ~21 px per well) plus synthetic chips. Expect to tune the thresholds in `AF`
   (top of `autofit.js`) as more real photos arrive. It needs the whole array in view and ≥ ~5 px per well; lens centre is not fitted.
 * Only crop and auto-fit have undo (crop restores the previous image crop; auto-fit has its own one-step undo). No project save/load. Fisheye is one radial model, not a per-lens profile.

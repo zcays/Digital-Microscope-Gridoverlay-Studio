@@ -26,6 +26,8 @@ const defaultWarp = () => ({
   enabled: true,                                                                  // "Apply distortion" switch (before / after)
   c: {nw: {x: 0, y: 0}, ne: {x: 1, y: 0}, se: {x: 1, y: 1}, sw: {x: 0, y: 1}},   // corners, canvas-normalised
   dev: {n: {x: 0, y: 0}, e: {x: 0, y: 0}, s: {x: 0, y: 0}, w: {x: 0, y: 0}},     // edge-bow offsets from each edge's midpoint
+  mesh: null,                                                                     // fine correction on top of the handles: {n, d: [dx0, dy0, dx1, dy1, …]} = n×n nodes
+                                                                                  // over the canvas, canvas-normalised offsets. Filled by Auto-fit / Auto-fix distortion.
 });
 
 const S = {

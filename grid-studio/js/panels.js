@@ -55,8 +55,8 @@ function buildChipPanel() {
   const tools = document.createElement('div'); p.append(tools);       // greyed out until a chip is ticked
   checkbox(tools, 'Fit canvas to array', () => S.chip.fit, setChipFit, 'canvas = the N × M wells + border');
   slider(tools, 'Dead room %', () => S.chip.margin, setChipMargin, 0, 40, 1);
-  buttons(tools, [['afRun', 'Auto-fit image to grid', 'primary', autoFit], ['afUndo', 'Undo auto-fit', '', undoAutoFit]]);
-  note(tools, 'Finds the wells in the photo and sets tilt, size, position, fisheye and distortion for you. Fine-tune afterwards if needed.', 'autoFitInfo');
+  buttons(tools, [['afButton', 'Auto-fit image to grid', 'primary', autoFit], ['afUndo', 'Undo auto-fit', '', undoAutoFit]]);
+  note(tools, 'Finds the wells in the photo and sets tilt, size, position, fisheye and distortion (handles + fine mesh) for you. Fine-tune afterwards if needed.', 'autoFitInfo');
   const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);   // filled by updateChipInfo()
   note(p, 'Tick a version: the grid takes its shape, well size and pitch from the table, true to scale, and the canvas is sized to the real array plus a border. Then move / scale / rotate the image until it lines up with the wells — the µm/px readout is your image\'s calibration. Untick for the manual grid.');
 
@@ -65,7 +65,7 @@ function buildChipPanel() {
     tools.classList.toggle('off', !S.chip.id); tools.inert = !S.chip.id;
     const manual = $('#gridManual'); manual.classList.toggle('off', !!S.chip.id); manual.inert = !!S.chip.id;
     updateChipInfo();
-    $('#afRun').disabled = !S.chip.id || !S.img.el; $('#afUndo').disabled = !afUndoState;
+    $('#afButton').disabled = !S.chip.id || !S.img.el; $('#afUndo').disabled = !afUndoState;
   });
 }
 
@@ -82,8 +82,11 @@ function buildLensPanel() {
 
 function buildWarpPanel() {
   const p = $('#p-warp');
-  buttons(p, [['wTool', 'Distort tool', 'primary', () => setTool('warp')], ['wReset', 'Reset distortion', '', resetWarp]]);
+  buttons(p, [['wTool', 'Distort tool', '', () => setTool('warp')], ['wReset', 'Reset distortion', '', resetWarp]]);
   checkbox(p, 'Apply distortion', () => S.warp.enabled, setter(['gl'], v => S.warp.enabled = v), 'untick to compare');
+  buttons(p, [['wAuto', 'Auto-fix distortion', 'primary', autoFixDistortion], ['wUndo', 'Undo', '', undoAutoFit]]);
+  note(p, 'Auto-fix distortion bends the image onto the ticked chip grid: it sets the 8 handles and a fine correction mesh underneath them, without changing tilt, size or position. Use it after Auto-fit or after lining the image up roughly by hand.', 'warpFixInfo');
+  syncs.push(() => { $('#wAuto').disabled = !S.chip.id || !S.img.el; $('#wUndo').disabled = !afUndoState; $('#wReset').textContent = S.warp.mesh ? 'Reset distortion (incl. fine mesh)' : 'Reset distortion'; });
   note(p, 'In the Distort tool (D) drag a corner to move it, drag a side handle to move the whole edge, and hold Alt/Option while dragging a side to bend it. The grid stays fixed; the image bends to meet it.');
 }
 

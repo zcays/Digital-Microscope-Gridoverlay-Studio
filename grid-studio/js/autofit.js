@@ -24,12 +24,17 @@ const AF = {
   minStrength: 6,           // spectrum peak / median: below this there is no regular grid in the picture
   maxMedianError: .10,      // lattice periods; above this the fit is rejected (random data gives .25)
   minInliers: .75,          // share of samples within a quarter period of their wall (random data gives .5)
+  meshNodes: 17,            // fine distortion mesh: nodes per side (16 cells; lines up with the 32- and 16-cell render meshes)
+  meshSmooth: .5,           // stiffness of the fine mesh (higher = smoother, follows less local detail)
+  meshPasses: 4,            // the errors are only known mod 1 and far-off samples are down-weighted, so the mesh is fitted in passes
+  meshMaxShift: .6,         // a mesh node may move the picture at most this many lattice periods
   maxSpill: .55,            // well pattern just outside the fitted array, relative to inside; more = the photo has more wells than the chip
 };
 const AF_K1 = 0, AF_K2 = 1, AF_ROT = 2, AF_SCALE = 3, AF_X = 4, AF_Y = 5, AF_WARP = 6;       // parameter vector layout (22 numbers)
 const AF_STEPS = [1e-4, 1e-4, 1e-3, 1e-5, 1e-2, 1e-2, ...new Array(16).fill(1e-5)];
 
-/** Forward image model: source px (sx, sy) → canvas px, written to out[0], out[1]. geo = {w, h, cx, cy, docW, docH}. */
+/** Forward image model: source px (sx, sy) → canvas px, written to out[0], out[1]; out[2], out[3] = canvas-normalised position BEFORE the
+ *  distortion (the coordinates the handles and the fine mesh work in). geo = {w, h, cx, cy, docW, docH, mesh?}. */
 function afForward(th, geo) {
   const k1 = th[AF_K1], k2 = th[AF_K2], a = th[AF_ROT] * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a), sc = th[AF_SCALE];
   const lcx = geo.cx * geo.w, lcy = geo.cy * geo.h, R = .5 * Math.hypot(geo.w, geo.h), lens = k1 !== 0 || k2 !== 0;
@@ -49,12 +54,13 @@ function afForward(th, geo) {
     }
     const dx = (lcx + mx * R - hw) * sc, dy = (lcy + my * R - hh) * sc;
     let px = ox + cs * dx - sn * dy, py = oy + sn * dx + cs * dy;
+    const u = px / geo.docW, v = py / geo.docH; out[2] = u; out[3] = v;
     if (warped) {
-      const u = px / geo.docW, v = py / geo.docH;
       const a0 = 2 * (u - .5) * (u - 1), a1 = -4 * u * (u - 1), a2 = 2 * u * (u - .5), b0 = 2 * (v - .5) * (v - 1), b1 = -4 * v * (v - 1), b2 = 2 * v * (v - .5);
       px = (b0 * (a0 * nwx + a1 * nx + a2 * nex) + b1 * (a0 * wx + a1 * cx + a2 * ex) + b2 * (a0 * swx + a1 * sx_ + a2 * sex)) * geo.docW;
       py = (b0 * (a0 * nwy + a1 * ny + a2 * ney) + b1 * (a0 * wy + a1 * cy + a2 * ey) + b2 * (a0 * swy + a1 * sy_ + a2 * sey)) * geo.docH;
     }
+    if (geo.mesh) { const o = warpMeshOffset(geo.mesh, u, v); px += o.x * geo.docW; py += o.y * geo.docH; }
     out[0] = px; out[1] = py;
   };
 }
@@ -62,11 +68,31 @@ function afForward(th, geo) {
 const afErf = x => { const t = 1 / (1 + .3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return x < 0 ? -y : y; };
 const afPercentile = (arr, p) => { const a = Array.from(arr).sort((x, y) => x - y); return a.length ? a[Math.min(a.length - 1, Math.max(0, Math.round(p / 100 * (a.length - 1))))] : NaN; };
 
+/** Least-squares fit of one coordinate of the fine mesh. samples: [{u, v, t, w}] = position, wanted offset, weight.
+ *  Bilinear data term + second-difference smoothness (so the mesh bends gently and extrapolates sensibly where there is no data). */
+function afSolveMeshAxis(samples, n, smooth) {
+  const m = n * n, A = Array.from({length: m}, () => new Float64Array(m)), b = new Float64Array(m); let wsum = 0;
+  for (const s of samples) {
+    if (!(s.w > 0)) continue;
+    const fu = clamp(s.u, 0, 1) * (n - 1), fv = clamp(s.v, 0, 1) * (n - 1), i = Math.min(n - 2, Math.floor(fu)), j = Math.min(n - 2, Math.floor(fv)), a = fu - i, c = fv - j;
+    const idx = [j * n + i, j * n + i + 1, (j + 1) * n + i, (j + 1) * n + i + 1], B = [(1 - a) * (1 - c), a * (1 - c), (1 - a) * c, a * c];
+    for (let p = 0; p < 4; p++) { b[idx[p]] += s.w * B[p] * s.t; for (let r = 0; r < 4; r++) A[idx[p]][idx[r]] += s.w * B[p] * B[r]; }
+    wsum += s.w;
+  }
+  const lam = smooth * wsum / m, stencil = [1, -2, 1];
+  const bend = k3 => { for (let p = 0; p < 3; p++) for (let r = 0; r < 3; r++) A[k3[p]][k3[r]] += lam * stencil[p] * stencil[r]; };
+  for (let j = 0; j < n; j++) for (let i = 1; i < n - 1; i++) { bend([j * n + i - 1, j * n + i, j * n + i + 1]); bend([(i - 1) * n + j, i * n + j, (i + 1) * n + j]); }
+  for (let k = 0; k < m; k++) A[k][k] += .02 * wsum / m + 1e-12;                             // gentle pull to zero keeps empty areas calm
+  return cvSolve(A, Array.from(b));
+}
+
 /** The whole analysis. Pure: does not touch app state.
  *  imgEl + imgW/imgH: the source picture. chip: {wide, long}. grid: {x0, y0, pitch, size} of the chip grid on the canvas (px).
- *  doc: {w, h}. lens: {cx, cy}. Returns {ok, reason} or {ok: true, th, stats}. */
-function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
-  const t0 = performance.now(), gap = grid.pitch - grid.size, geo = {w: imgW, h: imgH, cx: lens.cx, cy: lens.cy, docW: doc.w, docH: doc.h};
+ *  doc: {w, h}. lens: {cx, cy}. start: null for a full fit, or {th} = current image settings to refine the DISTORTION ONLY
+ *  (tilt, size, position and lens are kept; only the handles and the fine mesh change).
+ *  Returns {ok, reason} or {ok: true, th, mesh, stats}. */
+function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens, start = null) {
+  const t0 = performance.now(), gap = grid.pitch - grid.size, geo = {w: imgW, h: imgH, cx: lens.cx, cy: lens.cy, docW: doc.w, docH: doc.h, mesh: null};
   // What repeats in an edge image? Each well has two edges. If the well is about half the pitch the two edges are evenly spaced, so the
   // edge pattern repeats at HALF the pitch (q = 2) and sits on the well edges; otherwise it repeats at the pitch (q = 1), centred on the walls.
   const q = Math.abs(Math.cos(Math.PI * grid.size / grid.pitch)) < .35 ? 2 : 1;
@@ -119,7 +145,7 @@ function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
   const sgeo = new Float32Array(nc); for (let i = 0; i < nc; i++) sgeo[i] = Math.sqrt(fam[0].amp[i] * fam[1].amp[i]);   // lattice present in BOTH directions
 
   /* model helpers */
-  const th = new Array(22).fill(0), tmp = [0, 0];
+  const th = new Array(22).fill(0), tmp = [0, 0, 0, 0];
   th[AF_ROT] = -Math.atan2(fam[0].f.y, fam[0].f.x) * 180 / Math.PI + (turned ? 90 : 0);
   th[AF_SCALE] = P * ws / pitchW;
   const lattice = (t, idx, axis) => { const fw = afForward(t, geo), out = new Float64Array(idx.length); for (let n = 0; n < idx.length; n++) { fw(xw[idx[n]] / ws, yw[idx[n]] / ws, tmp); out[n] = (tmp[axis] - org[axis]) / P; } return out; };
@@ -134,17 +160,21 @@ function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
 
   /* 4. coarse solution from the unwrapped samples. Their line indices are absolute (no mod-1 ambiguity), so this cannot slip by a wall.
         Order matters: tilt/scale/position → + lens → distortion corners with tilt/scale frozen (fitting them together is degenerate). */
-  const seed = axes.map(A => { const idx = []; for (let i = 0; i < nc; i++) if (!isNaN(A.F.K[i])) idx.push(i); return subsample(idx, 5000); });
-  if (seed[0].length < 200 || seed[1].length < 200) return {ok: false, reason: 'Too little of the well pattern is visible to line it up.'};
+  let seed = axes.map(A => { const idx = []; for (let i = 0; i < nc; i++) if (!isNaN(A.F.K[i])) idx.push(i); return subsample(idx, 5000); });
+  if (!start && (seed[0].length < 200 || seed[1].length < 200)) return {ok: false, reason: 'Too little of the well pattern is visible to line it up.'};
   const koff = [0, 0];                                             // whole lines to subtract so that the array's first line gets index 0
   const residSeed = t => { const out = new Float64Array(seed[0].length + seed[1].length); let o = 0; axes.forEach((A, axis) => { const l = lattice(t, seed[axis], axis); for (let n = 0; n < l.length; n++) out[o++] = l[n] - (A.sign * A.F.K[seed[axis][n]] - koff[axis]); }); return out; };
   const solveSeed = tag => {
     for (let i = AF_WARP; i < 22; i++) th[i] = 0;
     fit(similarity, residSeed, .1, tag + ' tilt/scale/position'); fit([AF_K1, ...similarity], residSeed, .1, tag + ' + lens'); fit([AF_K1, ...corners], residSeed, .1, tag + ' + corners');
   };
-  axes.forEach((A, axis) => { const l = lattice(th, seed[axis], axis), d = []; for (let n = 0; n < l.length; n++) d.push(A.sign * A.F.K[seed[axis][n]] - l[n]); th[AF_X + axis] += afPercentile(d, 50) * P; });
-  dbg.init = th.slice(0, 6); dbg.seedN = [seed[0].length, seed[1].length]; dbg.offsets = [];
-  solveSeed('seed');
+  dbg.offsets = [];
+  if (start) for (let i = 0; i < 22; i++) th[i] = start.th[i];        // distortion-only: keep the user's tilt / size / position / lens
+  else {
+    axes.forEach((A, axis) => { const l = lattice(th, seed[axis], axis), d = []; for (let n = 0; n < l.length; n++) d.push(A.sign * A.F.K[seed[axis][n]] - l[n]); th[AF_X + axis] += afPercentile(d, 50) * P; });
+    dbg.init = th.slice(0, 6); dbg.seedN = [seed[0].length, seed[1].length];
+    solveSeed('seed');
+  }
 
   /* 5. where does the array start? returns the wall index (per axis) of the array's first wall in the current model */
   const findOffsets = () => {
@@ -188,31 +218,100 @@ function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
     });
   };
 
-  /* 6. number the lines from the array's first wall, then polish on EVERY sample inside the array using wrapped (mod 1) residuals */
-  let roi = [], weights = [];
+  /* 6. polish on EVERY sample inside the array using wrapped (mod 1) residuals. Full fit: first number the lines from the array's first wall. */
+  let roi = [], weights = [], seedMesh = null;
+  const wrappedErr = (t, n, axis, l) => { const dlt = l - axes[axis].sign * axes[axis].F.frac[roi[n]]; return dlt - Math.round(dlt); };
   const residWrapped = t => {
     const out = new Float64Array(2 * roi.length); let o = 0;
-    axes.forEach((A, axis) => { const l = lattice(t, roi, axis); for (let n = 0; n < roi.length; n++) { const d = l[n] - A.sign * A.F.frac[roi[n]]; out[o++] = (d - Math.round(d)) * weights[axis][n]; } });
+    for (let axis = 0; axis < 2; axis++) { const l = lattice(t, roi, axis); for (let n = 0; n < roi.length; n++) out[o++] = wrappedErr(t, n, axis, l[n]) * weights[axis][n]; }
     return out;
   };
-  for (let round = 0; round < 3; round++) {
-    const off = findOffsets(); dbg.offsets.push(off);
-    if (off[0] || off[1]) { koff[0] += off[0]; koff[1] += off[1]; th[AF_X] -= off[0] * P; th[AF_Y] -= off[1] * P; solveSeed('renumbered'); }
-    else if (round > 0) break;
+  const absErrors = () => { const e = []; for (let axis = 0; axis < 2; axis++) { const l = lattice(th, roi, axis); for (let n = 0; n < roi.length; n++) e.push(Math.abs(wrappedErr(th, n, axis, l[n]))); } return e; };
+  const buildRoi = () => {
     const all = [], fw = afForward(th, geo);
     for (let i = 0; i < nc; i++) { fw(xw[i] / ws, yw[i] / ws, tmp); const a = (tmp[0] - org[0]) / P, b = (tmp[1] - org[1]) / P; if (a > -.25 && a < N[0] + .25 && b > -.25 && b < N[1] + .25) all.push(i); }
     roi = subsample(all, 7000);
-    if (roi.length < 300) return {ok: false, reason: 'The well array could not be located in the picture.'};
     weights = axes.map(A => { const med = afPercentile(roi.map(i => A.F.amp[i]), 50) || 1; return roi.map(i => Math.min(2, A.F.amp[i] / med)); });
-    fit([AF_K1, ...corners], residWrapped, .08, `polish ${round} lens + corners (n=${roi.length})`);
+    return roi.length >= 300;
+  };
+  const notLocated = {ok: false, reason: 'The well array could not be located in the picture.'};
+  if (start) {
+    // Distortion only. The user's placement decides which wall is which: the typical offset between the absolute (unwrapped) line
+    // indices and the current model must be close to a whole number, otherwise the picture is not on the grid yet.
+    const notAligned = {ok: false, reason: 'The image is not roughly lined up with the grid yet. Run Auto-fit first (or line it up by hand), then fix the distortion.'};
+    if (seed[0].length < 200 || seed[1].length < 200) return notAligned;
+    for (let axis = 0; axis < 2; axis++) {
+      const l = lattice(th, seed[axis], axis), dlt = []; for (let n = 0; n < l.length; n++) dlt.push(axes[axis].sign * axes[axis].F.K[seed[axis][n]] - l[n]);
+      const c = afPercentile(dlt, 50); if (Math.abs(c - Math.round(c)) > .3) return notAligned;
+      koff[axis] = Math.round(c);
+    }
+    fit(corners, residSeed, .1, 'distortion corners from absolute wall numbers');          // can recover distortions larger than half a well
+    fit([...corners, ...bows], residSeed, .1, 'distortion corners + bows from absolute wall numbers');
+    { // a first fine mesh from the absolute numbers too, so a strong local bulge does not defeat the mod-1 polish below
+      const fw = afForward(th, geo), samples = [[], []];
+      for (let axis = 0; axis < 2; axis++) for (const i of seed[axis]) {
+        fw(xw[i] / ws, yw[i] / ws, tmp); const err = (tmp[axis] - org[axis]) / P - (axes[axis].sign * axes[axis].F.K[i] - koff[axis]);
+        samples[axis].push({u: tmp[2], v: tmp[3], t: -err * P / (axis ? doc.h : doc.w), w: Math.min(1, .3 / (Math.abs(err) + 1e-9))});
+      }
+      const dx = afSolveMeshAxis(samples[0], AF.meshNodes, AF.meshSmooth), dy = afSolveMeshAxis(samples[1], AF.meshNodes, AF.meshSmooth);
+      if (dx && dy) { seedMesh = {n: AF.meshNodes, d: Array.from({length: 2 * dx.length}, (_, k) => k % 2 ? dy[k >> 1] : dx[k >> 1])}; geo.mesh = seedMesh; }
+    }
+    if (!buildRoi()) return notLocated;
+    const e0 = absErrors();
+    if (afPercentile(e0, 50) > .17 || e0.filter(v => v < .25).length / e0.length < .6) return notAligned;
+    // (no mod-1 polish of the handles here: with a strong local bulge it could slip by a wall; the mesh passes below finish the job)
+  } else {
+    for (let round = 0; round < 3; round++) {
+      const off = findOffsets(); dbg.offsets.push(off);
+      if (off[0] || off[1]) { koff[0] += off[0]; koff[1] += off[1]; th[AF_X] -= off[0] * P; th[AF_Y] -= off[1] * P; solveSeed('renumbered'); }
+      else if (round > 0) break;
+      if (!buildRoi()) return notLocated;
+      fit([AF_K1, ...corners], residWrapped, .08, `polish ${round} lens + corners (n=${roi.length})`);
+    }
+    const noBows = th.slice();
+    fit([AF_K1, ...corners, ...bows], residWrapped, .08, 'polish + edge bows');
+    if (th.slice(AF_WARP).some(v => Math.abs(v) > .25) || Math.abs(th[AF_K1]) > 1) th.splice(0, 22, ...noBows);     // implausible → keep the simpler fit
   }
-  const noBows = th.slice();
-  fit([AF_K1, ...corners, ...bows], residWrapped, .08, 'polish + edge bows');
-  if (th.slice(AF_WARP).some(v => Math.abs(v) > .25) || Math.abs(th[AF_K1]) > 1) th.splice(0, 22, ...noBows);       // implausible → keep the simpler fit
+  geo.mesh = null; const handlesOnly = afPercentile(absErrors(), 50);
+
+  /* 7. fine mesh: what the 8 handles cannot follow. Each sample says "move the picture here by −error"; a smooth 17 × 17 mesh of such
+        moves is fitted (robustly, three passes because the errors are only known mod 1). */
+  let mesh = seedMesh; const G = AF.meshNodes, dims = [doc.w, doc.h];
+  for (let pass = 0; pass < AF.meshPasses; pass++) {
+    geo.mesh = mesh; const fw = afForward(th, geo), samples = [[], []];
+    for (let n = 0; n < roi.length; n++) {
+      fw(xw[roi[n]] / ws, yw[roi[n]] / ws, tmp); const u = tmp[2], v = tmp[3], cur = mesh ? warpMeshOffset(mesh, u, v) : {x: 0, y: 0};
+      for (let axis = 0; axis < 2; axis++) {
+        const err = wrappedErr(th, n, axis, (tmp[axis] - org[axis]) / P);
+        samples[axis].push({u, v, t: (axis ? cur.y : cur.x) - err * P / dims[axis], w: weights[axis][n] * Math.min(1, .12 / (Math.abs(err) + 1e-9))});   // Huber weight: far-off samples count less
+      }
+    }
+    const dx = afSolveMeshAxis(samples[0], G, AF.meshSmooth), dy = afSolveMeshAxis(samples[1], G, AF.meshSmooth);
+    if (!dx || !dy) break;
+    const lim = [AF.meshMaxShift * P / doc.w, AF.meshMaxShift * P / doc.h], dd = new Array(2 * G * G);
+    for (let k = 0; k < G * G; k++) { dd[2 * k] = clamp(dx[k], -lim[0], lim[0]); dd[2 * k + 1] = clamp(dy[k], -lim[1], lim[1]); }
+    mesh = {n: G, d: dd};
+  }
+  geo.mesh = mesh;
+  if (mesh && afPercentile(absErrors(), 50) > handlesOnly) { mesh = null; geo.mesh = null; }      // never keep a mesh that made things worse
+  const meshShiftPx = mesh ? Math.max(...mesh.d.map((v, k) => Math.abs(v) * dims[k % 2])) : 0;
+  if (mesh && meshShiftPx < .02 * P) { mesh = null; geo.mesh = null; }                             // nothing to correct
+
+  if (start) {                                                     // distortion only: the user's placement chose the wall numbering — verify it against the array's real edges
+    const off = findOffsets(); dbg.offsets.push(off);
+    if (off[0] || off[1]) return {ok: false, reason: `The image is placed about ${Math.max(Math.abs(off[0]), Math.abs(off[1])) / q} well(s) away from where the array belongs on the grid. Run Auto-fit (or move the image) first, then fix the distortion.`};
+  }
 
   /* stats on unweighted wrapped residuals */
   const errs = []; axes.forEach((A, axis) => { const l = lattice(th, roi, axis); for (let n = 0; n < roi.length; n++) { const d = l[n] - A.sign * A.F.frac[roi[n]]; errs.push(Math.abs(d - Math.round(d))); } });
   const median = afPercentile(errs, 50), inliers = errs.filter(e => e < .25).length / errs.length;
+  const sideErr = (() => { const la = lattice(th, roi, 0), lb = lattice(th, roi, 1), pick = f => { const v = []; for (let n = 0; n < roi.length; n++) if (f(la[n], lb[n])) v.push(Math.abs(wrappedErr(th, n, 0, la[n])), Math.abs(wrappedErr(th, n, 1, lb[n]))); return afPercentile(v, 50) / q; };
+    return {left: pick(a => a < 2.5), right: pick(a => a > N[0] - 2.5), top: pick((a, b) => b < 2.5), bottom: pick((a, b) => b > N[1] - 2.5)}; })();
+  { // signed residual map (periods), for troubleshooting: AF.debug.map = [{a, b, rx, ry, wx, wy}] in lattice coordinates
+    const la = lattice(th, roi, 0), lb = lattice(th, roi, 1);
+    dbg.map = roi.map((i, n) => { const dx = la[n] - axes[0].sign * axes[0].F.frac[i], dy = lb[n] - axes[1].sign * axes[1].F.frac[i]; return {a: la[n], b: lb[n], rx: dx - Math.round(dx), ry: dy - Math.round(dy), wx: weights[0][n], wy: weights[1][n]}; });
+    dbg.N = N; dbg.th = th.slice();
+  }
   // Does the well pattern carry on beyond the fitted array? Then the photo has more wells than this chip version (wrong version ticked).
   const spill = (() => {
     const fw = afForward(th, geo), sum = [0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0];           // inside, left, right, top, bottom
@@ -224,47 +323,60 @@ function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
     const inside = sum[0] / Math.max(1, cnt[0]);
     return [1, 2, 3, 4].map(k => cnt[k] > 30 ? sum[k] / cnt[k] / inside : 0);
   })();
-  const stats = {medianPitch: median, medianImagePx: median * pitchW / ws, medianWell: median / q, inliers, pitchImagePx: q * pitchW / ws, harmonic: q, tiltDeg: th[AF_ROT], turned, strength: pk.strength,
-                 spill, samples: roi.length, workSize: [w, h], ms: Math.round(performance.now() - t0), firstWall: koff.slice()};
+  const stats = {medianPitch: median, medianImagePx: median * pitchW / ws, medianWell: median / q, inliers, pitchImagePx: q * pitchW / ws, harmonic: q, medianHandlesOnly: handlesOnly, meshShiftPx, sideErr, tiltDeg: th[AF_ROT], turned, strength: pk.strength,
+                 spill, samples: roi.length, workSize: [w, h], ms: Math.round(performance.now() - t0), firstWall: koff.slice(), distortionOnly: !!start};
   if (Math.max(...spill) > AF.maxSpill) return {...wrongChip, stats};
   if (median > AF.maxMedianError || inliers < AF.minInliers) return {ok: false, reason: `The wells were found but could not be lined up reliably (typical error ${(median / q * 100).toFixed(0)}% of a well).`, stats};
-  return {ok: true, th, stats};
+  return {ok: true, th, mesh, stats};
 }
 
 /* ---------------- app glue ---------------- */
 let afUndoState = null;
 const afSnapshot = () => ({lens: {...S.lens}, img: {x: S.img.x, y: S.img.y, scale: S.img.scale, rot: S.img.rot}, warp: JSON.parse(JSON.stringify(S.warp))});
 function afRestore(s) { Object.assign(S.lens, s.lens); Object.assign(S.img, s.img); Object.assign(S.warp, JSON.parse(JSON.stringify(s.warp))); refresh('gl', 'warp', 'status'); }
+/** Current image settings as a parameter vector (the inverse of afApply). */
+function afCurrent() {
+  const c = S.warp.c, d = S.warp.dev;
+  return [S.lens.bypass ? 0 : S.lens.k1, S.lens.bypass ? 0 : S.lens.k2, S.img.rot, S.img.scale, S.img.x, S.img.y,
+          c.nw.x, c.nw.y, c.ne.x - 1, c.ne.y, c.se.x - 1, c.se.y - 1, c.sw.x, c.sw.y - 1, d.n.x, d.n.y, d.e.x, d.e.y, d.s.x, d.s.y, d.w.x, d.w.y];
+}
+function afApply(res, distortionOnly) {
+  const t = res.th;
+  if (!distortionOnly) { Object.assign(S.lens, {k1: t[AF_K1], k2: t[AF_K2], bypass: false}); Object.assign(S.img, {rot: t[AF_ROT], scale: t[AF_SCALE], x: t[AF_X], y: t[AF_Y]}); }
+  Object.assign(S.warp, {enabled: true, mesh: res.mesh,
+    c: {nw: {x: t[6], y: t[7]}, ne: {x: 1 + t[8], y: t[9]}, se: {x: 1 + t[10], y: 1 + t[11]}, sw: {x: t[12], y: 1 + t[13]}},
+    dev: {n: {x: t[14], y: t[15]}, e: {x: t[16], y: t[17]}, s: {x: t[18], y: t[19]}, w: {x: t[20], y: t[21]}}});
+  refresh('gl', 'warp', 'status');
+}
 
-/** Run the analysis on the loaded image for the ticked chip and apply the result. Returns the result object. */
-function autoFitNow() {
+/** Run the analysis on the loaded image for the ticked chip and apply the result. distortionOnly = keep tilt / size / position / lens
+ *  and only re-fit the distortion (handles + fine mesh) from where the image is now. Returns the result object. */
+function autoFitNow(distortionOnly = false) {
   const P = activePreset();
   if (!S.img.el) return {ok: false, reason: 'Load an image first.'};
   if (!P) return {ok: false, reason: 'Tick the chip version first, so I know which grid to fit.'};
   if (!S.chip.fit) setChipFit(true);                              // the array needs a defined place on the canvas
   const L = gridLayout(S.doc.w, S.doc.h);
-  const res = afCompute(S.img.el, S.img.w, S.img.h, P, {x0: L.x0, y0: L.y0, pitch: L.pitchX, size: L.size}, S.doc, S.lens);
+  const res = afCompute(S.img.el, S.img.w, S.img.h, P, {x0: L.x0, y0: L.y0, pitch: L.pitchX, size: L.size}, S.doc, S.lens, distortionOnly ? {th: afCurrent()} : null);
   if (!res.ok) return res;
   afUndoState = afSnapshot();
-  const t = res.th;
-  Object.assign(S.lens, {k1: t[AF_K1], k2: t[AF_K2], bypass: false});
-  Object.assign(S.img, {rot: t[AF_ROT], scale: t[AF_SCALE], x: t[AF_X], y: t[AF_Y]});
-  Object.assign(S.warp, {enabled: true,
-    c: {nw: {x: t[6], y: t[7]}, ne: {x: 1 + t[8], y: t[9]}, se: {x: 1 + t[10], y: 1 + t[11]}, sw: {x: t[12], y: 1 + t[13]}},
-    dev: {n: {x: t[14], y: t[15]}, e: {x: t[16], y: t[17]}, s: {x: t[18], y: t[19]}, w: {x: t[20], y: t[21]}}});
-  refresh('gl', 'warp', 'status');
+  afApply(res, distortionOnly);
   return res;
 }
-/** Button / shortcut entry point: shows progress and the outcome. */
-function autoFit() {
-  const info = $('#autoFitInfo'); if (info) info.textContent = 'Analysing the picture…';
-  toast('Analysing the picture…');
+function afMessage(res, distortionOnly) {
+  if (!res.ok) return `${distortionOnly ? 'Auto-fix distortion' : 'Auto-fit'} did not change anything. ${res.reason}`;
+  const s = res.stats, pct = v => (v * 100).toFixed(0) + '%', worst = Math.max(s.sideErr.left, s.sideErr.right, s.sideErr.top, s.sideErr.bottom);
+  const head = distortionOnly ? 'Distortion fixed' : `Auto-fit done: tilt ${(-s.tiltDeg).toFixed(1)}° removed`;
+  return `${head}. Typical error ${s.medianImagePx.toFixed(1)} px (${pct(s.medianWell)} of a well; ${pct(s.medianHandlesOnly / s.harmonic)} before the fine correction), worst side ${pct(worst)}, ${pct(s.inliers)} of the array matched.`;
+}
+/** Button / shortcut entry points: show progress and the outcome. */
+function afRun(distortionOnly) {
+  const say = t => { for (const id of ['#autoFitInfo', '#warpFixInfo']) { const e = $(id); if (e) e.textContent = t; } };
+  say('Analysing the picture…'); toast('Analysing the picture…');
   setTimeout(() => {                                               // let the message paint before the heavy work
-    let res; try { res = autoFitNow(); } catch (err) { console.error(err); res = {ok: false, reason: 'Auto-fit hit an internal error (see the browser console).'}; }
-    const s = res.stats, msg = res.ok
-      ? `Auto-fit done: tilt ${(-s.tiltDeg).toFixed(1)}° removed, typical error ${s.medianImagePx.toFixed(1)} px (${(s.medianWell * 100).toFixed(0)}% of a well), ${(s.inliers * 100).toFixed(0)}% of the array matched.`
-      : `Auto-fit did not change anything. ${res.reason}`;
-    toast(msg); if (info) info.textContent = msg; syncAll();
+    let res; try { res = autoFitNow(distortionOnly); } catch (err) { console.error(err); res = {ok: false, reason: 'An internal error occurred (see the browser console).'}; }
+    const msg = afMessage(res, distortionOnly); toast(msg); say(msg); syncAll();
   }, 40);
 }
-function undoAutoFit() { if (!afUndoState) return; afRestore(afUndoState); afUndoState = null; const info = $('#autoFitInfo'); if (info) info.textContent = 'Auto-fit undone.'; syncAll(); }
+const autoFit = () => afRun(false), autoFixDistortion = () => afRun(true);
+function undoAutoFit() { if (!afUndoState) return; afRestore(afUndoState); afUndoState = null; for (const id of ['#autoFitInfo', '#warpFixInfo']) { const e = $(id); if (e) e.textContent = 'Undone.'; } syncAll(); }

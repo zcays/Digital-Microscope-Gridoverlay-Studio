@@ -5,6 +5,8 @@
  *   corner drag      → moves that corner (skew / perspective-like)
  *   side drag        → moves the whole edge (both of its corners)
  *   Alt + side drag  → bows the edge into a curve (stored as an offset from the edge's midpoint)
+ * On top of the handles there can be a FINE MESH (S.warp.mesh, 17 × 17 nodes of small offsets) that follows local deviations the
+ * 8 handles cannot. It has no handles of its own: Auto-fit / Auto-fix distortion (autofit.js) compute it, Reset distortion clears it.
  * Points are in canvas-normalised coordinates (0..1, y down). The warp is a biquadratic patch over
  * a 3 × 3 control grid, so with untouched handles it is exactly the identity. */
 
@@ -26,15 +28,24 @@ function warpControlPoints() {
 }
 
 const lagrange = t => [2 * (t - .5) * (t - 1), -4 * t * (t - 1), 2 * t * (t - .5)];   // quadratic basis at t = 0, .5, 1
+/** Fine-mesh offset at canvas-normalised (u, v): bilinear between the n×n nodes of mesh = {n, d}. Pure (no app state). */
+function warpMeshOffset(mesh, u, v) {
+  const n = mesh.n, d = mesh.d, fu = (u < 0 ? 0 : u > 1 ? 1 : u) * (n - 1), fv = (v < 0 ? 0 : v > 1 ? 1 : v) * (n - 1);
+  const i = Math.min(n - 2, Math.floor(fu)), j = Math.min(n - 2, Math.floor(fv)), a = fu - i, b = fv - j, k = (j * n + i) * 2, k2 = k + 2 * n;
+  return {x: (d[k] * (1 - a) + d[k + 2] * a) * (1 - b) + (d[k2] * (1 - a) + d[k2 + 2] * a) * b,
+          y: (d[k + 1] * (1 - a) + d[k + 3] * a) * (1 - b) + (d[k2 + 1] * (1 - a) + d[k2 + 3] * a) * b};
+}
+/** Where the pass-1 picture point (u, v) is drawn: the 8-handle patch plus the fine mesh (if any). Both renderers and the overlay use this. */
 function warpPoint(u, v, P = warpControlPoints()) {
   const lu = lagrange(u), lv = lagrange(v); let x = 0, y = 0;
   for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { const w = lv[j] * lu[i]; x += w * P[j][i].x; y += w * P[j][i].y; }
+  if (S.warp.mesh) { const o = warpMeshOffset(S.warp.mesh, u, v); x += o.x; y += o.y; }
   return {x, y};
 }
 
 function warpActive() {
   const d = defaultWarp(), near = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
-  return CORNERS.some(k => !near(S.warp.c[k], d.c[k])) || SIDES.some(k => !near(S.warp.dev[k], d.dev[k]));
+  return !!S.warp.mesh || CORNERS.some(k => !near(S.warp.c[k], d.c[k])) || SIDES.some(k => !near(S.warp.dev[k], d.dev[k]));
 }
 function resetWarp() { const keep = S.warp.enabled; Object.assign(S.warp, defaultWarp(), {enabled: keep}); refresh('gl', 'warp'); }
 
