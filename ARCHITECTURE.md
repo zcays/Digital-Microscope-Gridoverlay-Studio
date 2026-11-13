@@ -38,6 +38,8 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `grid.js` | `gridLayout()` (where cells go) and `drawGrid()` (draws them; also used for export) | change grid geometry or look |
 | `view.js` | Stage size, view zoom, pointer→canvas coords, status bar, µm scale bar | change zoom or status readouts |
 | `crop.js` | Crop tool: selection maths, canvas→image rect conversion, apply / undo / reset, crop box, its drag types | change cropping |
+| `cv.js` | Vision toolbox with no app state: blur, gradients, FFT, lattice peak finder, phase demodulation, phase unwrapping, robust least squares | reuse or improve a vision step |
+| `autofit.js` | Auto-fit: finds the well lattice in the photo and fits the image model to the chip grid; Auto-fit / Undo buttons | change how auto-fit decides |
 | `ui.js` | Widget helpers: `slider`, `checkbox`, `buttons`, `line`, `note`, `setter`, `KEY_STEP` | add a new kind of control |
 | `panels.js` | Builds the right-hand panels from the widgets | add a slider / setting |
 | `tools.js` | Active tool, `setTool`, mouse/touch dispatch, pan + image-move drags | add a tool |
@@ -85,6 +87,27 @@ canvas, converts that rect to image pixels (`canvasRectToImageRect`) and `gl.js`
 space. It never changes `S.doc`, the grid or the chip scale, and it moves/scales/rotates with the image. Non-destructive: Reset crop /
 Undo restore the full picture. (For a rotated image the stored rect is the bounding box of the selection.)
 
+**Auto-fit (computer vision, `autofit.js` + `cv.js`).** One button sets `S.lens.k1`, `S.img` (rot/scale/x/y) and `S.warp` so the photo
+matches the ticked chip's grid. Steps, in order:
+1. *Lattice frequency.* Wells repeat, so the summed power spectra of `|gx|` and `|gy|` have two perpendicular peaks → pitch and tilt.
+   The basis chosen is the lowest-frequency strong pair that generates the strongest pair (avoids harmonics and the lattice diagonal).
+2. *Phase.* Complex demodulation of `|gradient along f|` gives, per pixel, "line index mod 1" for each wall direction. Using the
+   gradient magnitude makes dark and bright walls equivalent. Chips whose well is ~half the pitch (V7.0, V15.2) have edge patterns
+   that repeat at HALF the pitch, sitting on the well edges, so they are fitted with `q = 2` (twice the lines, different origin).
+3. *Unwrap* (quality-guided flood fill) → absolute line indices over the strong area. The number of periods the pattern spans is
+   compared with the chip's well count to fix a wrong harmonic and to detect a 90°-turned non-square chip.
+4. *Coarse fit on the unwrapped samples:* tilt/scale/position → + lens `k1` → distortion corners with tilt/scale FROZEN. Fitting
+   tilt/scale together with the corners is degenerate (a huge tilt cancelled by huge corner moves), so they are never free together.
+5. *Array edges.* A blurred box of N periods is slid along the two-direction lattice energy (rejects 1-D things like a bright bar);
+   the exact first wall is the candidate with strong line energy on the edge walls and none just outside. Lines are renumbered and
+   step 4 is repeated.
+6. *Polish* on every sample inside the array with wrapped (mod 1) residuals, then edge bows. Only ever started from the coarse
+   solution, never from scratch (wrapped residuals alone can slip by a whole wall).
+7. *Refuse rather than guess:* median error > 10% of a period, < 75% of samples matched, or the well pattern continuing beyond the
+   fitted array (> 55% of the inside level = more wells than the ticked chip) → nothing is changed and the user gets the reason.
+`afForward()` is a third copy of the image maths (source px → canvas px, i.e. the INVERSE direction of the shader, plus the warp).
+`AF.debug` holds the last run's internals. Works on the raw source pixels, so it ignores the current image settings except the lens centre.
+
 **Registries instead of a big switch.** A tool = an entry in `TOOLS` (`cursor`, optional `enter`, `pick(e,p)` → drag name).
 A drag = an entry in `dragTypes` (`start`, `move`, optional `end`). `tools.js` only dispatches. Crop and Distort register
 themselves in their own files.
@@ -111,6 +134,9 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 * **Browsers cache the `.js/.css` files while you develop** (a normal reload may serve old code). Hard refresh (⌘⇧R)
   or open DevTools → Network → "Disable cache".
 * **Comment terminators:** a stray missing `*/` in a file header silently comments out the whole file.
+* **Three copies of the image maths:** `gl.js` (shader), `cpu.js` (software) and `afForward()` in `autofit.js`. Change one → change all;
+  `tests.html` compares GPU vs software and checks auto-fit results in the rendered picture.
+* `grid-studio/samples/` is git-ignored (the user's own photos). The real-photo auto-fit test skips itself when the file is missing.
 * **Don't call `renderGL()` directly** (it only exists on the GPU path) — use `renderImage()`. `dom.gl` is *replaced* by a new element in
   software mode, so never cache a reference to it across frames.
 * **WebGL feedback loops:** pass 1 renders into `fbTexture`; never have it bound as the sampled texture at the same time.
@@ -129,7 +155,9 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 
 ## Known limits / ideas
 
-* Only crop has undo (it restores the previous image crop). No project save/load. Fisheye is one radial model, not a per-lens profile.
+* Auto-fit has been validated on ONE real photo (a V12 chip, ~21 px per well) plus synthetic chips. Expect to tune the thresholds in `AF`
+  (top of `autofit.js`) as more real photos arrive. It needs the whole array in view and ≥ ~5 px per well; lens centre is not fitted.
+* Only crop and auto-fit have undo (crop restores the previous image crop; auto-fit has its own one-step undo). No project save/load. Fisheye is one radial model, not a per-lens profile.
 * Chip draft angle, bottom shape and depth are listed but not drawn (top view only). The table's "well size" is drawn
   as given (assumed to be the top opening).
 * Table quirk: V10.2 and V12 list well counts one lower than array size ÷ pitch (66 vs 66.7; 49 vs 50).

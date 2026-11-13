@@ -46,6 +46,9 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 ## Features
 
 - **Chip versions:** tick one of V1-Square, V3.1, V3.2, V7.0, V9.0–V9.2, V10.2, V11, V12, V15.1, V15.2 and the grid takes that chip's well shape (square or circle), well size and pitch from the geometry table, true to scale, filling the whole canvas. Adjust the image (move / scale / rotate) until it lines up; the app shows the image's µm per pixel. By default the canvas is resized to fit the chip's real N × M well array plus an adjustable dead-room border ("Fit canvas to array" / "Dead room %"); untick it to tile the grid across a fixed canvas instead.
+- **Auto-fit (computer vision):** tick the chip version, press **Auto-fit image to grid** (or `A`) and the app finds the wells in the
+  photo and sets tilt, size, position, fisheye strength and the distortion handles so the photo lines up with the grid. It reports the
+  typical error, refuses (and changes nothing) when it cannot do it reliably, and has **Undo auto-fit**. See "Auto-fit" below.
 - Grid overlay: square size, horizontal / vertical / combined spacing, dead-space margins, columns/rows, colour, opacity, outline or filled
 - Distort tool (`D`): drag the 4 corners, drag a side to move the whole edge, Alt-drag a side to bend it; the grid stays fixed
 - Fisheye (barrel / pincushion) correction with lens centre, plus before/after toggle
@@ -54,6 +57,19 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
 - PNG export of image + grid (both, or either one) at the full canvas resolution, including fisheye correction, distortion and crop
 - Grid line ("wall") thickness is adjustable (Line width) and scales with the canvas size so it stays clearly visible
+
+## Auto-fit
+
+1. Open the photo and tick the chip version it shows (for example V12).
+2. Click **Auto-fit image to grid** in the Chip version panel, or press `A`. It takes one to a few seconds.
+3. Read the message under the button, e.g. "tilt 2.1° removed, typical error 1.2 px (6% of a well), 94% of the array matched".
+   Fine-tune by hand afterwards if you want (arrow keys, Distort tool), or press **Undo auto-fit**.
+
+What it needs: the **whole well array in the picture**, wells at least about 5 px across in the photo, and the **right chip version
+ticked** (it uses that version's well count to find the array's edges). It works with dark or bright walls, a tilted or keystoned
+(angled) photo, fisheye, and a non-square chip turned 90°. When it cannot line things up reliably, or the photo has a different number of
+wells than the ticked version, it says so and leaves the image untouched. Photos where each well is only a few pixels (for example a whole
+V9.0 array with 333 wells across) are too small to fit.
 
 ## Keyboard shortcuts
 
@@ -65,6 +81,7 @@ Press `?` (or `H`) in the app to see this list. On Mac use `⌘` where it says `
 | `←` `→` `↑` `↓` | Nudge the image 1 px (`Shift` = 10 px, `Alt` = 0.1 px) |
 | `R` / `M` | Reset the image position, scale and rotation / centre the image |
 | `\` | Show the original / fisheye-corrected image (before / after) |
+| `A` | Auto-fit the image to the ticked chip's grid |
 | `G` | Show or hide the grid |
 | `[` `]` | Square size − / + (manual grid only) |
 | `{` `}` | Grid spacing − / + (manual grid only) |
@@ -92,5 +109,5 @@ Self-tests: open `grid-studio/tests.html` (should say PASS).
 
 `grid-studio/index.html` is the page, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
 `state` (state + scheduler), `presets` (chip table + scale), `actions`, `warp` (distort), `gl` (GPU image layer), `cpu` (software image layer), `render` (picks one), `images`, `grid`,
-`view`, `crop`, `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
+`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit), `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
 loaded in order, which is why the app also works from disk. Chip data lives in `grid-studio/js/presets.js`.

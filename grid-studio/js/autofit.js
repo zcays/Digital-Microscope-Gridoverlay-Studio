@@ -15,6 +15,7 @@
  *
  * afForward() MUST mirror the renderers: if the image maths in gl.js / cpu.js / warp.js changes, change it here too
  * (tests.html fits a synthetic chip and then checks the rendered picture against the grid).
+ * Troubleshooting: after a run, AF.debug in the browser console holds the internals (peaks, extents, per-stage errors, first walls).
  * Units: source-image px in, canvas px out; "lattice" coordinates are in pitches, with walls 0..N on the integers. */
 
 const AF = {
@@ -23,6 +24,7 @@ const AF = {
   minStrength: 6,           // spectrum peak / median: below this there is no regular grid in the picture
   maxMedianError: .10,      // lattice periods; above this the fit is rejected (random data gives .25)
   minInliers: .75,          // share of samples within a quarter period of their wall (random data gives .5)
+  maxSpill: .55,            // well pattern just outside the fitted array, relative to inside; more = the photo has more wells than the chip
 };
 const AF_K1 = 0, AF_K2 = 1, AF_ROT = 2, AF_SCALE = 3, AF_X = 4, AF_Y = 5, AF_WARP = 6;       // parameter vector layout (22 numbers)
 const AF_STEPS = [1e-4, 1e-4, 1e-3, 1e-5, 1e-2, 1e-2, ...new Array(16).fill(1e-5)];
@@ -110,7 +112,8 @@ function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
   let ratio = periodsRatio(); dbg.firstRatio = ratio; dbg.firstExtents = [fam[0].extent, fam[1].extent];
   if (ratio > 1.45 && ratio < 2.7) { if (!analyse({x: pk.f1.x / 2, y: pk.f1.y / 2}, {x: pk.f2.x / 2, y: pk.f2.y / 2})) return tooSmall; decideTurn(); ratio = periodsRatio(); }
   else if (ratio > .36 && ratio < .68) { if (!analyse({x: pk.f1.x * 2, y: pk.f1.y * 2}, {x: pk.f2.x * 2, y: pk.f2.y * 2})) return tooSmall; decideTurn(); ratio = periodsRatio(); }
-  if (ratio < .7 || ratio > 1.4) return {ok: false, reason: `The pattern in the picture spans about ${Math.round(ratio * chip.wide)} wells, not the ${chip.wide} of this chip version. Is the right version ticked, and is the whole array in the picture?`};
+  const wrongChip = {ok: false, reason: `The well pattern in the picture does not match this chip version (${chip.wide} × ${chip.long} wells). Is the right version ticked, and is the whole array in the picture?`};
+  if (ratio < .7 || ratio > 1.4) return wrongChip;
   Object.assign(dbg, {ratio, turned, extents: [fam[0].extent, fam[1].extent], f: [fam[0].f, fam[1].f], pitchW});
   const axes = turned ? [{F: fam[1], sign: -1}, {F: fam[0], sign: 1}] : [{F: fam[0], sign: 1}, {F: fam[1], sign: 1}];   // canvas X, canvas Y
   const sgeo = new Float32Array(nc); for (let i = 0; i < nc; i++) sgeo[i] = Math.sqrt(fam[0].amp[i] * fam[1].amp[i]);   // lattice present in BOTH directions
@@ -210,8 +213,20 @@ function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens) {
   /* stats on unweighted wrapped residuals */
   const errs = []; axes.forEach((A, axis) => { const l = lattice(th, roi, axis); for (let n = 0; n < roi.length; n++) { const d = l[n] - A.sign * A.F.frac[roi[n]]; errs.push(Math.abs(d - Math.round(d))); } });
   const median = afPercentile(errs, 50), inliers = errs.filter(e => e < .25).length / errs.length;
+  // Does the well pattern carry on beyond the fitted array? Then the photo has more wells than this chip version (wrong version ticked).
+  const spill = (() => {
+    const fw = afForward(th, geo), sum = [0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0];           // inside, left, right, top, bottom
+    for (let i = 0; i < nc; i++) {
+      fw(xw[i] / ws, yw[i] / ws, tmp); const a = (tmp[0] - org[0]) / P, b = (tmp[1] - org[1]) / P, midA = a > 2 && a < N[0] - 2, midB = b > 2 && b < N[1] - 2;
+      const k = midA && midB ? 0 : midB && a > -6 && a < -2.5 ? 1 : midB && a > N[0] + 2.5 && a < N[0] + 6 ? 2 : midA && b > -6 && b < -2.5 ? 3 : midA && b > N[1] + 2.5 && b < N[1] + 6 ? 4 : -1;
+      if (k >= 0) { sum[k] += sgeo[i]; cnt[k]++; }
+    }
+    const inside = sum[0] / Math.max(1, cnt[0]);
+    return [1, 2, 3, 4].map(k => cnt[k] > 30 ? sum[k] / cnt[k] / inside : 0);
+  })();
   const stats = {medianPitch: median, medianImagePx: median * pitchW / ws, medianWell: median / q, inliers, pitchImagePx: q * pitchW / ws, harmonic: q, tiltDeg: th[AF_ROT], turned, strength: pk.strength,
-                 samples: roi.length, workSize: [w, h], ms: Math.round(performance.now() - t0), firstWall: koff.slice()};
+                 spill, samples: roi.length, workSize: [w, h], ms: Math.round(performance.now() - t0), firstWall: koff.slice()};
+  if (Math.max(...spill) > AF.maxSpill) return {...wrongChip, stats};
   if (median > AF.maxMedianError || inliers < AF.minInliers) return {ok: false, reason: `The wells were found but could not be lined up reliably (typical error ${(median / q * 100).toFixed(0)}% of a well).`, stats};
   return {ok: true, th, stats};
 }

@@ -12,5 +12,7 @@ Start with **[ARCHITECTURE.md](ARCHITECTURE.md)** — file map, concepts, recipe
    Browsers cache JS during development: hard-refresh before concluding something "didn't change".
 7. Image drawing has two renderers (GPU `gl.js`, software `cpu.js`, chosen in `render.js`). Call `renderImage()`, and mirror
    any image-maths change in both files; `tests.html` compares them.
-8. Keep the product rule: **the grid is static; the image is adjusted to fit it.**
-9. Don't commit secrets or machine-specific folders (`.claude/` is git-ignored).
+8. Auto-fit (`autofit.js`, vision helpers in `cv.js`) has its own copy of the image maths (`afForward`) and a strict order of fitting
+   stages — read "Auto-fit" in ARCHITECTURE.md before touching it. Thresholds live in `AF` at the top of the file.
+9. Keep the product rule: **the grid is static; the image is adjusted to fit it.**
+10. Don't commit secrets, machine-specific folders (`.claude/`) or the user's photos (`grid-studio/samples/`); all are git-ignored.
