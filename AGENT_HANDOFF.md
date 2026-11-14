@@ -65,7 +65,7 @@ No project build/tests have been executed yet. Original instructions: open `grid
   - provider/model: antigravity / gemini-4-argon, thinking_level high.
   - Tool next says completion wakes lead; end turn, no polling.
 - Lead owns desktop/, backend/, package/build configuration, assets/, scripts/, docs/, integration and packaging. Next: bootstrap local Node (missing PATH), create isolated Python venv, freeze backend with managed loopback OS-assigned port/auth/lifetime, Electron resource loading/security, icon files and build pipelines. Delegate tests to Argon after frontend result; preserve no-overlap ownership.
-- Python available at /Users/ivanchao/miniforge3/bin/python3 (3.13.13), host arm64, Chrome installed. No builds/tests executed yet.
+- Python available at `~/miniforge3/bin/python3` (3.13.13), host arm64, Chrome installed. No builds/tests executed yet.
 
 ## Lead milestone 2 — implemented integration and first builds
 - Argon frontend task completed with renderer/index.html, styles.css, app.js. Inspected code and actual Electron screenshots; it works but needs plainer product copy and small readability refinement.
@@ -112,3 +112,52 @@ No project build/tests have been executed yet. Original instructions: open `grid
 - Windows EXE/ZIP NOT BUILT or tested. Native Windows x64 manual workflow configured (also native Intel and ARM Mac), not triggered or pushed. No release published. Local x64 CPython 3.13.3; ARM 3.13.13; workflow pins Python 3.13.13 / Node24.22.3. No universal/Linux artifact claimed.
 - All 5 original dirty file hashes verified unchanged. Their exact user patch is preserved at vendor/app-a-user-changes.patch, with separate SurveyApps correction diffs. No source commits or pushes.
 - No active delegates or required implementation remaining. If user requests release later, review redistribution rights (upstream LICENSE files absent), obtain signing/notarization credentials via appropriate secret tool, and run native Windows/Intel CI before claiming that coverage.
+
+---
+
+# Adaptive Grid Studio auto-fit continuation (2026-11-13)
+
+## Objective and scope
+Improve the static Grid Studio auto-fit algorithm (`grid-studio/js/autofit.js`, `grid-studio/js/cv.js`) for biological tissue-covered photographs and across all 12 chip presets (`CHIPS` in `presets.js`), while keeping the grid static, preserving chip geometry and renderer math, mutating shared state objects (`S.*`) in place, and preserving unrelated `surveyapps/` working-tree edits. Do not commit, push, or publish private sample photos.
+
+## Leadership and continuity
+- Native Claude (`claude-fable-5-2`) implemented the adaptive dual-phasor demodulation, phase-step coherence presence map, multi-patch unwrapping/joining, cross-wall array-edge scoring, and initial synthetic/real-photo test expansion before pausing at its 5-hour usage limit.
+- Continuation followed the fallback chain (`claude-opus-5-5` → `gpt-6-astra` → `gemini-4-argon`), recovering Fable's exact edits and harness without resetting work.
+
+## Implementation summary (`grid-studio/`)
+- **Dual-phasor demodulation & local polarity (`cv.js`, `autofit.js`):** Combines high-pass brightness (`flat`, clipped at `3 × P85` to suppress glints, glare bars, and bright tissue rims) and directional edge magnitude (`|gradient along f|`). Calibrates local phase polarity between brightness and edges where edges are crisp, carrying that calibration into faint tissue-covered regions. Supports both full-pitch (`q = 1`) and half-pitch (`q = 2` for `V7.0`, `V15.2`) lattices.
+- **Warp-tolerant presence map (`autofit.js`):** Measures 2.5-period symmetric lag phase-step coherence (`lag = round(1.25 * pitchW / step)`) gated by combined SNR above the noise floor, so regions stretched by barrel distortion or local chip warping still register as orderly lattice rather than being dropped.
+- **Multi-patch unwrapping & integer-offset joining (`cv.js`, `autofit.js`):** Unwraps all connected components of the presence mask (`cvUnwrap` returns `{un, label, main, count}`). Seeds the coarse fit on the largest patch (`main`), then iteratively joins secondary patches whose median offset from the fitted model sits within `0.3` of an integer with `< 0.2` median spread.
+- **Cross-wall array boundary detection (`autofit.js`):** Correlates brightness inside each candidate column/row with the perpendicular lattice in short segments (`4 * q` periods), using a narrow comb template for thin-wall square chips (`wallFrac < 0.25`) and sinusoidal correlation otherwise. Evaluates boundary sharpness (`edgeSure`) and outside continuation (`spill`).
+- **True wall numbers in polish & side-error safeguard (`autofit.js`):** Uses known absolute wall numbers (`K - koff`) for joined cells during wrapped polish and residual evaluation (`AF.maxAbsError = 2.5`), preventing whole-well corner slips from masquerading as small mod-1 residuals. Rejects fits when any adequately sampled side (`AF.minSideSamples = 30`) exceeds `AF.maxSideError = 0.10` of a well.
+- **In-place state restoration & user messaging (`autofit.js`, `panels.js`):** If `autoFitNow()` temporarily switches `S.chip.fit` from tiled (`false`) to array-fit (`true`) and the fit is refused or throws, the previous layout (`S.chip`, `S.doc`, `S.zoom`) and image state are restored in place without replacing state object references. `afMessage()` reports visible array coverage, uncertain edge localization (`edgeSure < 1.5`), and hidden/faint/out-of-view corners (`hiddenCorners`).
+
+## Verified test results and visual checks
+- **Browser self-test suite (`grid-studio/tests.html`):** **120 / 120 PASS** in headless Chrome (0 console/page errors). Covers:
+  - Chip table integrity and exact drawn well/pitch ratios in fit and tiled modes across all 12 presets.
+  - GPU vs. software (`?renderer=cpu`) pixel parity across 7 states including fine mesh.
+  - Synthetic tilt + fisheye recovery, local bulge fine-mesh correction, and `Auto-fix distortion` recovery/refusal (half-well and one-whole-well offset refusals).
+  - Tiled-layout and state-object identity (`S.img`, `S.lens`, `S.warp`, `S.grid`, `S.chip`) preservation when `autoFitNow()` refuses.
+  - Synthetic biological tissue + glare across all 12 chip presets (`V9.0` cleanly refused at `< 5 px` per well; all other 11 presets fit with `< 0.16` pitch corner error and `0.00°` rotation error), plus hard tissue (`80%` coverage, `15%` opaque, `0.15` contrast) on `V11`, `V12`, and small-circle `V9.2` (cleanly refused when side residual exceeds threshold).
+  - Both local real microscope photos (gitignored under `grid-studio/samples/`):
+    - **Real V12 photo:** `ok: true`, reference-corner error `0.23` well, typical error `0.6 px` (`3.0%` of a well; `6.1%` before fine mesh), worst side `4.0%`, `97.8%` inliers, tilt `-2.14°`.
+    - **Real V11 tissue-covered photo:** `ok: true`, reference-corner error `0.00` well, typical error `0.4 px` (`2.5%` of a well; `4.0%` before fine mesh), worst side `6.9%`, `99.2%` inliers, wells clearly seen in `84.0%` of the array (`edgeSure`: `[8.09, 8.57]`).
+- **48-case synthetic stress harness:** **45 / 48** within the strict `< 0.35` pitch corner-error threshold across plain, tissue, dark-tissue, and hard-tissue variants for all 12 presets (`V9.0` 4/4 expected refusals; `V9.2_hard` 1.09-pitch slip cleanly refused by the `AF.maxSideError` guard; remaining two borderline cases are `V1-Square_tissue` at `0.35` pitch on the top-right corner where tissue rim and dark glare band coincide, and `V15.1_hard` at `0.38` pitch on the bottom-left corner at `9.6 px` pitch under 80% tissue).
+- **Visual overlay inspection:** Rendered full-canvas overlays and app screenshots for both real `V11` and `V12` photos confirm that the static grid aligns cleanly with visible wells around the tissue boundary and across the array, with no console errors.
+
+## Unavoidable limitations
+- **Obscured geometry is inferred, not observed:** Where opaque tissue, glare, or framing completely hides an array edge or corner, the model extrapolates from visible patches using the chip's nominal well count (`wide × long`) and smooth mesh regularization. If an outer edge has weak cross-wall signal (`edgeSure < 1.5`) or a corner has `< 15%` visible wells, the app warns the user to check alignment by eye and nudge with the arrow keys if needed.
+- **Minimum well resolution (`≥ ~5 px` per period):** Full-array photos of very dense presets at standard camera resolutions (e.g., `V9.0` with `333 × 300` wells at `~4.3 px/pitch` in a 2000 px frame) fall below the Nyquist/demodulation limit and are refused rather than guessed. Small circular wells (`V9.2`, `166 × 150` wells at `~8.5 px/pitch`) under heavy opaque tissue (`80%+` coverage) can suffer phase-unwrap or boundary ambiguity and will be refused when edge residuals exceed `AF.maxSideError`.
+
+## Crop on a rotated image (2026-11-13, lead: Claude Fable 5.2)
+
+- Bug reported by the user: after rotating the image, an applied crop came out as a slanted box.
+  Cause: `S.img.crop` stored the bounding box of the selection in the unrotated image.
+- Fix: `S.img.crop` is now an oriented rectangle `{x, y, w, h, rot}` in image px (`rot` = turn about its centre, missing = 0).
+  `canvasRectToImageRect()` sets `rot = −image rotation` (and undoes the distortion handles first); both renderers mask through
+  `cropFrame()` (crop.js). Files: `grid-studio/js/crop.js`, `gl.js`, `cpu.js`, `state.js` (comment), `panels.js` (hint text),
+  `tests.html` (+1 crop test, +2 GPU-vs-software cases), `ARCHITECTURE.md`, `README.md`.
+- Verified: `tests.html` 123 / 123 in headless Chrome with a fresh profile (title `PASS`); a 400 × 300 selection on a 20°-rotated
+  image exports as an exact level rectangle.
+- Gotcha: reuse of a headless-Chrome `--user-data-dir` served cached old `.js` and produced a false failure; use a new one per run.
+- Not done: nothing committed or pushed; the SurveyApps vendored copy of Grid Studio was not re-synced.

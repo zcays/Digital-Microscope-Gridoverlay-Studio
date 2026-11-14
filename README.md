@@ -55,7 +55,7 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 - Distort tool (`D`): drag the 4 corners, drag a side to move the whole edge, Alt-drag a side to bend it; the grid stays fixed. A fine correction mesh (set automatically, no handles) sits on top of these
 - Fisheye (barrel / pincushion) correction with lens centre, plus before/after toggle
 - Move, scale and rotate the image; arrow-key nudging
-- Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back)
+- Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back); a crop drawn on a rotated image keeps the straight edges you drew
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
 - PNG export of image + grid (both, or either one) at the full canvas resolution, including fisheye correction, distortion and crop
 - Grid line ("wall") thickness is adjustable (Line width) and scales with the canvas size so it stays clearly visible
@@ -63,7 +63,7 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 ## Auto-fit
 
 1. Open the photo and tick the chip version it shows (for example V12).
-2. Click **Auto-fit image to grid** in the Chip version panel, or press `A`. It takes one to a few seconds.
+2. Click **Auto-fit image to grid** in the Chip version panel, or press `A`. Large or difficult photos can take several seconds.
 3. Read the message under the button, e.g. "tilt 2.1° removed, typical error 1.2 px (6% of a well), 94% of the array matched".
    Fine-tune by hand afterwards if you want (arrow keys, Distort tool), or press **Undo auto-fit**.
 
@@ -71,7 +71,9 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 handles plus a fine correction mesh underneath them. Auto-fit already runs it as its last step, so use the button after you have moved
 handles or the image by hand and want the distortion redone. The image must already be roughly on the grid (within about a third of a
 well, and not a whole well off); otherwise it tells you to run Auto-fit first. **Reset distortion** clears the handles and the fine mesh.
-The message reports the typical error before and after the fine correction and the worst side.
+The message reports the typical error before and after the fine correction, the worst side, and how much of the array showed a usable well pattern. Tissue-covered or faint areas are inferred from visible patches. Check any reported hidden corners or uncertain array edges by eye: a small residual on visible wells does not prove that an obscured edge is correctly numbered.
+
+The adaptive fit combines brightness and edge measurements, separates visible patches around tissue, and matches their wall numbers before fitting the image. Regression tests cover all chip presets, tissue, glare, rotation, distortion, and two local real photographs (V11 and V12). This is not a guarantee for every sample; completely hidden boundaries and very small wells remain ambiguous.
 
 What it needs: the **whole well array in the picture**, wells at least about 5 px across in the photo, and the **right chip version
 ticked** (it uses that version's well count to find the array's edges). It works with dark or bright walls, a tilted or keystoned

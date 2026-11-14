@@ -84,10 +84,14 @@ correction `r' = r(1 − k1 r² − k2 r⁴)`. Pass 2 (only if the distortion is
 mesh `S.warp.mesh` (`warp.js`). The fine mesh has 16 cells per side on purpose: its nodes coincide with vertices of both render meshes
 (32 GPU, 16 software), so the two renderers agree. Premultiplied alpha.
 
-**Crop only affects the image.** `S.img.crop` is a rect in *image* pixels (null = uncropped). The Crop tool lets you draw on the
-canvas, converts that rect to image pixels (`canvasRectToImageRect`) and `gl.js` masks everything outside it in the corrected-image
-space. It never changes `S.doc`, the grid or the chip scale, and it moves/scales/rotates with the image. Non-destructive: Reset crop /
-Undo restore the full picture. (For a rotated image the stored rect is the bounding box of the selection.)
+**Crop only affects the image.** `S.img.crop` is an *oriented* rectangle in image pixels, `{x, y, w, h, rot}` (null = uncropped;
+`rot` in degrees turns the rectangle about its own centre; a missing `rot` means 0). The Crop tool lets you draw on the canvas;
+`applyCrop()` converts the selection with `canvasRectToImageRect()` (undo distortion handles → translate → rotate → scale) and sets
+`rot = −image rotation`, so a crop drawn on a rotated image keeps the straight, level edges that were drawn (it used to store the
+bounding box in the unrotated image, which showed up as a slanted box). Both renderers get the rectangle from `cropFrame()` (crop.js)
+and mask in the corrected-image space, so the crop never changes `S.doc`, the grid or the chip scale, and it moves/scales/rotates with
+the image afterwards. With distortion handles or a fine mesh the drawn box is not exactly a rectangle in the image: the closest
+rectangle is used (edges can be off by the size of the distortion, typically a few px). Non-destructive: Reset crop / Undo restore it.
 
 **Auto-fit (computer vision, `autofit.js` + `cv.js`).** One button sets `S.lens.k1`, `S.img` (rot/scale/x/y) and `S.warp` so the photo
 matches the ticked chip's grid. Steps, in order:
@@ -96,14 +100,14 @@ matches the ticked chip's grid. Steps, in order:
 2. *Phase.* Complex demodulation of `|gradient along f|` gives, per pixel, "line index mod 1" for each wall direction. Using the
    gradient magnitude makes dark and bright walls equivalent. Chips whose well is ~half the pitch (V7.0, V15.2) have edge patterns
    that repeat at HALF the pitch, sitting on the well edges, so they are fitted with `q = 2` (twice the lines, different origin).
-3. *Unwrap* (quality-guided flood fill) → absolute line indices over the strong area. The number of periods the pattern spans is
+3. *Visibility and unwrap.* Combine brightness and edge phasors with local polarity; phase-step coherence locates visible patches independently of their brightness. Unwrap each connected patch, fit the strongest patch, and join other patches only when their wall-number offset agrees with the model. *Unwrap* (quality-guided flood fill) → absolute line indices over the strong area. The number of periods the pattern spans is
    compared with the chip's well count to fix a wrong harmonic and to detect a 90°-turned non-square chip.
 4. *Coarse fit on the unwrapped samples:* tilt/scale/position → + lens `k1` → distortion corners with tilt/scale FROZEN. Fitting
    tilt/scale together with the corners is degenerate (a huge tilt cancelled by huge corner moves), so they are never free together.
 5. *Array edges.* A blurred box of N periods is slid along the two-direction lattice energy (rejects 1-D things like a bright bar);
    the exact first wall is the candidate with strong line energy on the edge walls and none just outside. Lines are renumbered and
    step 4 is repeated.
-6. *Polish* on every sample inside the array with wrapped (mod 1) residuals, then edge bows. Only ever started from the coarse
+6. *Polish* on every sample inside the array with absolute wall numbers for joined patches and wrapped (mod 1) residuals elsewhere, then edge bows. Only ever started from the coarse
    solution, never from scratch (wrapped residuals alone can slip by a whole wall).
 7. *Fine mesh.* What the 8 handles cannot follow goes into `S.warp.mesh` (17 × 17 nodes of small canvas offsets, bilinear in between,
    added to the handle patch inside `warpPoint()` so both renderers and the overlay get it). Each sample says "move the picture here by
@@ -162,6 +166,8 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 ## Verifying a change
 
 1. Open `tests.html` → must show `PASS`. Add a test there for new maths.
+   Headless: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --user-data-dir=<NEW empty folder> --virtual-time-budget=1500000 --dump-dom http://localhost:8765/tests.html`
+   and read the `<title>`. Use a fresh `--user-data-dir` every run: a reused profile serves cached old `.js` files and reports stale results.
 2. Open the app, **Load sample**, exercise the feature, check the browser console for errors.
 3. For anything visual, look at it (zoom 100%): the tests do not check pixels.
 
@@ -169,7 +175,7 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 
 * The fine mesh has no handles: only Auto-fit / Auto-fix distortion write it and only Reset distortion (or Undo) clears it. Dragging a
   handle keeps the mesh, so a manual tweak after an auto-fix stays a small change on top of it.
-* Auto-fit has been validated on ONE real photo (a V12 chip, ~21 px per well) plus synthetic chips. Expect to tune the thresholds in `AF`
+* Auto-fit has regression coverage on two local real photos (V12 and tissue-covered V11), plus synthetic cases for every chip preset. This does not establish accuracy on every sample. Expect to tune the thresholds in `AF`
   (top of `autofit.js`) as more real photos arrive. It needs the whole array in view and ≥ ~5 px per well; lens centre is not fitted.
 * Only crop and auto-fit have undo (crop restores the previous image crop; auto-fit has its own one-step undo). No project save/load. Fisheye is one radial model, not a per-lens profile.
 * Chip draft angle, bottom shape and depth are listed but not drawn (top view only). The table's "well size" is drawn
