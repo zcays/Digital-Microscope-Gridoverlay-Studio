@@ -1,7 +1,7 @@
 {
   "name": "surveyapps",
   "productName": "SurveyApps!",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Offline microscopy alignment and fluorescence analysis desktop suite",
   "author": "zcays",

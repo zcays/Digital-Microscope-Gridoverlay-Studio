@@ -55,6 +55,10 @@ The testing delegate's narrative summary used wrong environment versions, nonexi
 
 The E2E harness now checks error arrays again after teardown. Connection resets/empty responses caused specifically by intentional quit are classified as expected; other late errors still fail. It also waits for the restarted Dash workspace to render before ending the recovery test. This prevents a premature PASS while asynchronous teardown events are still arriving.
 
+## Release `v1.0.2` (2026-11-15)
+
+Bundles Grid Studio `bc4e070` and Fluorescence Lab `3a4d4b8`: click-to-upload in both empty upload workspaces (`#hint` in Grid Studio and `#image-graph` in Fluorescence Lab), editable/importable chip lists (`chips.js`, `chiplist.js`), one-click Crop to array (`arrayOnly`), monochrome Apple Liquid Glass UI across the Electron shell and both tools, and rendering/slider/Plotly performance optimizations. Installers (`SurveyApps-1.0.2-mac-arm64.dmg/.zip`, `-mac-x64.dmg/.zip`, `-win-x64.exe/.zip`) are built and tested by the GitHub Actions workflow across `macos-15`, `macos-15-intel`, and `windows-2025` (`9/9` Python tests, `backend-lifecycle.cjs`, and `tests/desktop.cjs --packaged` with `134/134` Grid Studio self-tests).
+
 ## Release `v1.0.1` (2026-11-14)
 
 Same application with the bundled Grid Studio updated to `e6ba1c4`. Installers (`SurveyApps-1.0.1-mac-arm64.dmg/.zip`, `-mac-x64.dmg/.zip`, `-win-x64.exe/.zip`) were built by the GitHub Actions workflow on `macos-15`, `macos-15-intel` and `windows-2025`, each passing the Python suite, the backend lifecycle test and the packaged desktop E2E (which runs the embedded Grid Studio self-tests). The run is linked in the release notes; SHA-256 values are in that release's `SHA256SUMS.txt`. Not repeated for 1.0.1: the local installed-DMG / Rosetta checks described for 1.0.0.
