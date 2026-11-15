@@ -1,6 +1,6 @@
 # Source preservation and integration changes
 
-`vendor/provenance.json` records both pinned commits. `vendor/grid-studio/` is an exact public working-tree copy of Grid Studio: base commit `e6ba1c4` plus the uncommitted changes listed in `vendor/provenance.json`. `vendor/microscopy/` preserves the original scientific Python sources. No user photos, unrelated essay, machine configuration or git metadata are included.
+`vendor/provenance.json` records both pinned commits. `vendor/grid-studio/` is an exact public copy of Grid Studio commit `5082a2c5c02556019e67f043a5d5157644834ac6`. `vendor/microscopy/` preserves the original scientific Python sources. No user photos, unrelated essay, machine configuration or git metadata are included.
 
 The runtime copy `backend/microscopy_app.py` retains upstream algorithms and callbacks. Targeted changes:
 
@@ -14,7 +14,7 @@ The runtime copy `backend/microscopy_app.py` retains upstream algorithms and cal
 
 `backend/server.py` owns authentication, atomically allocated loopback port, local health check, parent pipe lifetime, payload limits and headers. The original debug Flask entry point is never used in the desktop package.
 
-Scientific limits retained: images convert to RGB 8-bit; multi-page TIFF uses the first frame. Fluorophore labels map to RGB weights, not spectral unmixing or concentration. Edge partial wells are excluded. Well selector lists at most 1,000 wells. Grid Studio has its upstream 8192 px document and GPU/CPU limits; auto-fit depends on visible regular arrays and should be checked visually. Grid Studio has no full project save/load feature upstream; Lab grid settings JSON does not embed the image or measured matrix.
+Scientific limits retained: images convert to RGB 8-bit; multi-page TIFF uses the first frame. Fluorophore labels map to RGB weights, not spectral unmixing or concentration. Edge partial wells are excluded. Well selector lists at most 1,000 wells. Grid Studio has its upstream 8192 px document and GPU/CPU limits; auto-fit depends on visible regular arrays and should be checked visually. Neither Grid Studio portable settings JSON (`grid-studio-settings`) nor Lab grid settings JSON embeds source image pixels or measured matrices.
 
 Neither repository snapshot contains a LICENSE. Confirm public redistribution rights before distributing outside the authorized local project. Dependencies retain their own licenses in the bundled runtimes and source lockfiles.
 
@@ -24,7 +24,7 @@ Plotly compatibility: change deprecated heatmap axis `titlefont` to `title.font`
 
 The App B runtime diff is included as `vendor/app-b-surveyapps.patch`, with the original file retained alongside. App A needs no patch (see above). No original repo working-tree file is edited by SurveyApps build or test commands.
 
-## Local working-tree integration
-Grid Studio now includes crop-to-array, editable chips.js, chip list import/export and persistence, chiplist.js and autofit-app.js. This is e6ba1c4 plus uncommitted upstream changes, listed in vendor/provenance.json. Run `python3 scripts/sync_grid_studio.py` from this checkout to sync and byte-verify the public allowlist; samples are never traversed. desktop/protocol.cjs owns protocol resource handling; main.cjs retains session security and lifecycle. desktop/** and vendor/grid-studio/** package the new scripts; samples are explicitly excluded. Local builds use dist-local.
+## Grid Studio settings integration (1.0.3)
+Grid Studio includes portable alignment settings save/load (`grid-studio/js/settings.js`, **Save settings…** / **Load settings…**, workspace `.json` drop, `⌘/Ctrl+S` shortcut) and top-bar loaded image filename display (`#imgName`). The public snapshot is pinned in `vendor/provenance.json`; it has no uncommitted source changes. In the parent Studio checkout, run `python3 surveyapps/scripts/sync_grid_studio.py` to sync and byte-verify the public allowlist; samples are never traversed. The standalone SurveyApps repository already contains this snapshot. `desktop/protocol.cjs` owns protocol resource handling; `main.cjs` retains session security and lifecycle. `desktop/**` and `vendor/grid-studio/**` package the new scripts; samples are explicitly excluded. Local builds use `dist-local`.
 
 Startup uses an empty Lab work surface with an Upload image prompt. Image operations and measurements require an upload; no demonstration pixels are measured. Grid Studio starts empty with a translucent dark overlay (`#hint`) dimming the stage grid so the drop/open prompt is legible until a valid image or sample is loaded. The optional Grid Studio sample uses grayscale pixels. Uploaded image colors are preserved.

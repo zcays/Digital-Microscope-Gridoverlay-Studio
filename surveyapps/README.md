@@ -17,7 +17,7 @@
 **SurveyApps!** packages two open-source microscopy tools into a single standalone desktop application:
 
 1. **Grid Studio** — from [Digital-Microscope-Gridoverlay-Studio](https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio)
-   Calibrated chip grid overlays, lens fisheye correction, corner/edge distortion warp, cropping, computer-vision **Auto-fit**, and full-resolution PNG export.
+   Calibrated chip grid overlays, lens fisheye correction, corner/edge distortion warp, cropping, computer-vision **Auto-fit**, portable alignment settings JSON save/load, and full-resolution PNG export.
 2. **Fluorescence Lab** — from [Microscopy-Grid-Overlay](https://github.com/zcays/Microscopy-Grid-Overlay)
    Interactive X/Y grid placement on TIFF/PNG/JPEG micrographs, per-well fluorescence intensity calculation across channels (`DAPI`, `FITC`, `TRITC`, `Cy5`, `mCherry`, `CFP`, `YFP`, `RGB`, `Grayscale`), Plotly heatmaps, CSV/PNG/well-crop exports, and JSON grid settings save/load.
 
@@ -43,9 +43,9 @@ Pre-built downloads are published on the **[GitHub Releases](https://github.com/
 
 | Platform | Recommended Download | Portable Alternative | Requirements |
 |---|---|---|---|
-| **macOS (Apple Silicon — M1/M2/M3/M4)** | `SurveyApps-1.0.2-mac-arm64.dmg` | `SurveyApps-1.0.2-mac-arm64.zip` | macOS 14.0+ |
-| **macOS (Intel x64)** | `SurveyApps-1.0.2-mac-x64.dmg` | `SurveyApps-1.0.2-mac-x64.zip` | macOS 14.0+ |
-| **Windows (64-bit x64)** | `SurveyApps-1.0.2-win-x64.exe` | `SurveyApps-1.0.2-win-x64.zip` | Windows 10/11 (64-bit) |
+| **macOS (Apple Silicon — M1/M2/M3/M4)** | `SurveyApps-1.0.3-mac-arm64.dmg` | `SurveyApps-1.0.3-mac-arm64.zip` | macOS 14.0+ |
+| **macOS (Intel x64)** | `SurveyApps-1.0.3-mac-x64.dmg` | `SurveyApps-1.0.3-mac-x64.zip` | macOS 14.0+ |
+| **Windows (64-bit x64)** | `SurveyApps-1.0.3-win-x64.exe` | `SurveyApps-1.0.3-win-x64.zip` | Windows 10/11 (64-bit) |
 
 > **Full step-by-step instructions:** See **[INSTALL.md](INSTALL.md)** for macOS DMG/ZIP installation, Windows EXE/ZIP installation, SHA-256 verification, and unsigned-app approval steps.
 
@@ -64,11 +64,12 @@ Pre-built downloads are published on the **[GitHub Releases](https://github.com/
 - **Fault isolation:** If the Python analysis engine encounters an error, **Grid Studio** stays fully usable while you retry **Fluorescence Lab**.
 
 ### 1. Grid Studio (Optical Correction & Calibrated Chip Overlay)
-- Load images via **Open image…**, drag-and-drop, clipboard paste, or **Load sample** (built-in fisheye test image).
+- Load images via **Open image…**, drag-and-drop, clipboard paste, or **Load sample** (built-in fisheye test image); the active filename is shown in the top bar.
 - **Chip presets:** `V1-Square`, `V3.1`, `V3.2`, `V7.0`, `V9.0–V9.2`, `V10.2`, `V11`, `V12`, `V15.1`, `V15.2` with live `µm/px` calibration readout and automatic `N × M` array canvas sizing, or switch to manual grid dimensions.
 - **Static grid, adjustable image:** Move (`V`), scale, rotate, arrow-key nudge, apply radial fisheye correction (`k₁`, `k₂`, lens center, `\` before/after toggle), distort corners/edges (`D`), and crop (`C`) without moving the reference grid.
 - **Computer-vision Auto-fit (`A`):** Aligns visible regular well arrays automatically and refuses rather than guesses when residual error is too high.
 - **GPU & CPU fallback:** Uses WebGL hardware rendering when available and automatically falls back to a matching Canvas 2D software renderer otherwise.
+- **Portable alignment settings (`Ctrl/⌘+S`):** Save and reload chip selection, alignment, fisheye, distortion, crop, grid, and export settings via **Save settings…** / **Load settings…** or by dropping a `.json` file onto the workspace (`<image>.gridstudio.json` or `grid-studio-settings.json`, without embedding image pixels).
 - **Export (`Ctrl/⌘+E`):** Full-resolution PNG of the corrected image, reference grid, or combined composite via native Save dialog.
 
 ### 2. Fluorescence Lab (Well Intensity Matrix & Heatmap Analysis)
@@ -88,7 +89,7 @@ Pre-built downloads are published on the **[GitHub Releases](https://github.com/
 | `A` | Grid Studio: Auto-fit image to selected chip grid |
 | `← → ↑ ↓` | Grid Studio: Nudge image `1 px` (`Shift` = `10 px`, `Alt` = `0.1 px`) |
 | `G` / `\` | Grid Studio: Toggle grid / Before-after fisheye toggle |
-| `Ctrl/⌘ + O` / `E` | Grid Studio: Open image / Export PNG |
+| `Ctrl/⌘ + O` / `S` / `E` | Grid Studio: Open image / Save settings… / Export PNG |
 | `?` | Grid Studio: Show full in-app shortcut reference |
 
 ---
@@ -131,7 +132,7 @@ npm start
   ```bash
   CSC_IDENTITY_AUTO_DISCOVERY=false npm run build:mac
   ```
-  Outputs `dist/SurveyApps-1.0.2-mac-arm64.dmg` and `dist/SurveyApps-1.0.2-mac-arm64.zip`.
+  Outputs `dist/SurveyApps-1.0.3-mac-arm64.dmg` and `dist/SurveyApps-1.0.3-mac-arm64.zip`.
 
 - **macOS (Intel x64 on Apple Silicon via Rosetta + x64 Python):**
   ```bash
@@ -145,12 +146,12 @@ npm start
   python scripts/build_backend.py
   npm run build:win
   ```
-  Outputs `dist/SurveyApps-1.0.2-win-x64.exe` (NSIS installer) and `dist/SurveyApps-1.0.2-win-x64.zip` (portable archive).
+  Outputs `dist/SurveyApps-1.0.3-win-x64.exe` (NSIS installer) and `dist/SurveyApps-1.0.3-win-x64.zip` (portable archive).
 
 ### Automated Tests
 
 ```bash
-# Python scientific & backend service unit tests (8/8)
+# Python scientific & backend service unit tests (9/9)
 python -m unittest discover -s tests -p "test_*.py" -v
 
 # Backend startup error & idempotent cleanup test

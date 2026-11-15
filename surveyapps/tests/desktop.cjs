@@ -12,7 +12,7 @@
  *   3. Grid Studio: sample load, file upload (#file), chip preset calibration (V12 / V3.1),
  *      image rotation, scale, crop + undo, lens fisheye k1/k2, warp control points,
  *      pixel/state verification, and native PNG export download via session will-download.
- *   4. Packaged / custom-protocol Grid Studio self-test suite (surveyapps://app/vendor/grid-studio/tests.html) -> 132/132 PASS.
+ *   4. Packaged / custom-protocol Grid Studio self-test suite (surveyapps://app/vendor/grid-studio/tests.html) -> 158/158 PASS (150 via software fallback).
  *   5. Fluorescence Lab: upload synthetic fixed RGB fixtures (PNG, TIFF, JPEG), unlinked X/Y spacing
  *      and placed center origin, channel intensities (mean, R, G, B, FITC, TRITC, Cy5, YFP, brightfield),
  *      Plotly heatmap rendered with zero JS/500 errors, native downloads for Image PNG, Grid PNG,
@@ -345,6 +345,43 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
       `SVG scale bar text should fit cleanly inside box: textRight=${svgFit.textRight}, boxWidth=${svgFit.boxWidth}`
     );
 
+    const assertShellTopbarNoOverlap = async label => {
+      const layout = await page.evaluate(() => {
+        const topbar = document.querySelector('.workspace-topbar');
+        const tbRect = topbar.getBoundingClientRect();
+        const items = Array.from(topbar.querySelectorAll('.sidebar-brand, .nav-item, #topbar-tool-controls, .privacy-chip, #bridge-status-pill'))
+          .filter(el => {
+            const st = getComputedStyle(el);
+            return st.display !== 'none' && st.visibility !== 'hidden' && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+          })
+          .map(el => {
+            const r = el.getBoundingClientRect();
+            return { cls: el.className, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+          });
+        const overlaps = [];
+        for (let i = 0; i < items.length; i++) {
+          for (let j = i + 1; j < items.length; j++) {
+            const a = items[i], b = items[j];
+            if (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) {
+              overlaps.push([a.cls, b.cls]);
+            }
+          }
+        }
+        const mainRect = document.getElementById('main-workspace').getBoundingClientRect();
+        return {
+          docOverflow: document.documentElement.scrollWidth > window.innerWidth,
+          tbOverflow: topbar.scrollWidth > topbar.clientWidth + 1,
+          mainBelowTopbar: mainRect.top >= tbRect.bottom - 1,
+          overlaps,
+        };
+      });
+      assert.equal(layout.docOverflow, false, `${label}: shell horizontal overflow`);
+      assert.equal(layout.tbOverflow, false, `${label}: shell topbar overflow`);
+      assert.equal(layout.mainBelowTopbar, true, `${label}: main workspace overlaps shell topbar`);
+      assert.deepEqual(layout.overlaps, [], `${label}: shell topbar controls overlap`);
+    };
+
+    await assertShellTopbarNoOverlap('shell-1440x960');
     await page.screenshot({ path: path.join(RESULTS_DIR, `home-wide-${modeLabel}.png`) });
     if (isPackaged) {
       await page.screenshot({ path: path.join(RESULTS_DIR, 'home.png') });
@@ -370,6 +407,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
       return shell.clientWidth >= 780 && home.offsetParent !== null;
     });
     assert.ok(minLayoutOk, '800x600 minimum window layout failed');
+    await assertShellTopbarNoOverlap('shell-800x600');
     await page.screenshot({ path: path.join(RESULTS_DIR, `home-800px-${modeLabel}.png`) });
 
     // Restore 1440x960 for tool tests
@@ -389,6 +427,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     const gridFrame = page.frameLocator('#frame-grid');
     await gridFrame.locator('#sample').waitFor({ state: 'visible', timeout: 15000 });
     assert.equal(await gridFrame.locator('body').evaluate(() => !!eval('S.img.el')), false);
+    assert.equal(await gridFrame.locator('#imgName').evaluate(el => el.hidden), true, '#imgName must be hidden before image load');
     await gridFrame.locator('#hint').waitFor({state:'visible'});
     await gridFrame.locator('#file').setInputFiles({name:'invalid.png',mimeType:'image/png',buffer:Buffer.from('invalid')});
     await gridFrame.getByText('Could not read that image',{exact:true}).waitFor();
@@ -419,7 +458,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
 
     // Working-tree integration: scripts and storage under the custom origin.
     const chipIntegration = await gsPageFrame().evaluate(async () => {
-      const scripts = await Promise.all(['chips.js', 'js/chiplist.js', 'js/autofit-app.js'].map(async name => {
+      const scripts = await Promise.all(['chips.js', 'js/chiplist.js', 'js/autofit-app.js', 'js/settings.js'].map(async name => {
         const response = await fetch(name);
         return response.ok && response.headers.get('content-type').includes('javascript');
       }));
@@ -427,12 +466,19 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
       localStorage.setItem(key, 'remembered');
       const stored = localStorage.getItem(key);
       localStorage.removeItem(key);
-      return {scripts, stored, count: eval('CHIPS.length'), arrayExport: typeof buildExportCanvas};
+      return {
+        scripts,
+        stored,
+        count: eval('CHIPS.length'),
+        arrayExport: typeof buildExportCanvas,
+        settingsApi: typeof settingsSnapshot === 'function' && typeof applySettings === 'function',
+      };
     });
     assert.ok(chipIntegration.scripts.every(Boolean), 'New scripts served as JavaScript');
     assert.equal(chipIntegration.stored, 'remembered');
     assert.ok(chipIntegration.count > 0);
     assert.equal(chipIntegration.arrayExport, 'function');
+    assert.equal(chipIntegration.settingsApi, true, 'settings.js functions must be loaded');
 
     const chipJSON = await gsPageFrame().evaluate(() => JSON.stringify(eval('CHIPS')));
     await gridFrame.locator('#p-chip input[type=file]').setInputFiles({name:'integration-chips.json', mimeType:'application/json', buffer:Buffer.from(chipJSON)});
@@ -453,11 +499,14 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     await gridFrame.locator('#hint').waitFor({state:'hidden'});
     const sampleState = await gsPageFrame().evaluate(() => {
       const st = eval('S');
-      return { w: st.img.w, h: st.img.h, docW: st.doc.w, docH: st.doc.h, hasEl: Boolean(st.img.el) };
+      const nameEl = document.getElementById('imgName');
+      return { w: st.img.w, h: st.img.h, docW: st.doc.w, docH: st.doc.h, hasEl: Boolean(st.img.el), imgName: nameEl.textContent, imgNameHidden: nameEl.hidden };
     });
     assert.equal(sampleState.w, 1200);
     assert.equal(sampleState.h, 800);
     assert.equal(sampleState.hasEl, true);
+    assert.equal(sampleState.imgNameHidden, false);
+    assert.equal(sampleState.imgName, 'Sample image');
 
     // 3b. Upload custom image file via #file input
     await gridFrame.locator('#file').setInputFiles(path.join(fixtureDir, 'fixture_rgb.png'));
@@ -471,8 +520,136 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
       null,
       { timeout: 10000 }
     );
+    const uploadedNameState = await gsPageFrame().evaluate(() => {
+      const el = document.getElementById('imgName');
+      return { hidden: el.hidden, text: el.textContent, title: el.title };
+    });
+    assert.equal(uploadedNameState.hidden, false, '#imgName must be visible after image upload');
+    assert.equal(uploadedNameState.text, 'fixture_rgb.png');
+    assert.ok(uploadedNameState.title.includes('fixture_rgb.png') && uploadedNameState.title.includes('241 × 181 px'));
+
+    // 3b-settings. Portable settings save/load, Cmd/Ctrl+S shortcut, and 800x600/1440x960 Grid Studio layout
+    await gsPageFrame().evaluate(() => {
+      selectChip('V3.1');
+      S.img.rot = 12.5;
+      refresh('gl', 'status');
+    });
+    const gsSettingsDl = await triggerAndAwaitDownload(
+      electronApp,
+      downloadDir,
+      async () => {
+        await gridFrame.locator('#settingsSave').click();
+      },
+      path.join(downloadDir, 'fixture_rgb.gridstudio.json')
+    );
+    assert.equal(gsSettingsDl.filename, 'fixture_rgb.gridstudio.json');
+    const gsSettingsJson = JSON.parse(fs.readFileSync(gsSettingsDl.savePath, 'utf8'));
+    assert.equal(gsSettingsJson.kind, 'grid-studio-settings');
+    assert.equal(gsSettingsJson.version, 1);
+    assert.equal(gsSettingsJson.image && gsSettingsJson.image.name, 'fixture_rgb.png');
+    assert.equal(gsSettingsJson.chip && gsSettingsJson.chip.id, 'V3.1');
+    assert.equal(gsSettingsJson.img && gsSettingsJson.img.rot, 12.5);
+
+    // Mutate chip + rotation, then restore via #settingsFile ("Load settings…")
+    await gsPageFrame().evaluate(() => {
+      selectChip('V12');
+      S.img.rot = -42;
+      refresh('gl', 'status');
+    });
+    const mutatedState = await gsPageFrame().evaluate(() => ({ chip: S.chip.id, rot: S.img.rot }));
+    assert.equal(mutatedState.chip, 'V12');
+    assert.equal(mutatedState.rot, -42);
+
+    await gridFrame.locator('#settingsFile').setInputFiles(gsSettingsDl.savePath);
+    await gsPageFrame().waitForFunction(() => S.chip.id === 'V3.1' && S.img.rot === 12.5, null, { timeout: 10000 });
+    const restoredSettingsInfo = await gsPageFrame().evaluate(() => document.getElementById('settingsInfo').textContent);
+    assert.ok(restoredSettingsInfo.includes('Settings loaded.'), `Expected Settings loaded summary, got: ${restoredSettingsInfo}`);
+
+    // Cmd/Ctrl+S inside Grid Studio saves settings without colliding with menu or reloading page
+    await gsPageFrame().evaluate(() => { window.__gsNoReloadToken = 'keep-alive'; });
+    await gridFrame.locator('#top .brand').click();
+    const shortcutCombo = process.platform === 'darwin' ? 'Meta+s' : 'Control+s';
+    const gsShortcutDl = await triggerAndAwaitDownload(
+      electronApp,
+      downloadDir,
+      async () => {
+        await page.keyboard.press(shortcutCombo);
+      },
+      path.join(downloadDir, 'fixture_rgb-shortcut.gridstudio.json')
+    );
+    assert.equal(gsShortcutDl.filename, 'fixture_rgb.gridstudio.json');
+    const gsShortcutJson = JSON.parse(fs.readFileSync(gsShortcutDl.savePath, 'utf8'));
+    assert.equal(gsShortcutJson.kind, 'grid-studio-settings');
+    assert.equal(gsShortcutJson.chip && gsShortcutJson.chip.id, 'V3.1');
+    assert.equal(gsShortcutJson.img && gsShortcutJson.img.rot, 12.5);
+    const noReloadState = await page.evaluate(() => document.getElementById('app-shell').getAttribute('data-view'));
+    assert.equal(noReloadState, 'grid');
+    const noReloadToken = await gsPageFrame().evaluate(() => window.__gsNoReloadToken);
+    assert.equal(noReloadToken, 'keep-alive', 'Cmd/Ctrl+S must not reload the Grid Studio frame');
+
+    // Verify Grid Studio + shell layout has no overlap at 1440x960 and 800x600 with #imgName & settings buttons visible
+    const assertGridLayoutNoOverlap = async label => {
+      await assertShellTopbarNoOverlap(`${label}-shell`);
+      const gsLayout = await gsPageFrame().evaluate(() => {
+        const top = document.getElementById('top');
+        const ws = document.getElementById('ws');
+        const side = document.getElementById('side');
+        const topRect = top.getBoundingClientRect();
+        const controls = Array.from(top.querySelectorAll('.brand, #imgName, label[for="file"], #sample, #settingsSave, #settingsLoad, #undo, #helpBtn, .exportControls'))
+          .filter(el => {
+            const st = getComputedStyle(el);
+            return !el.hidden && st.display !== 'none' && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+          })
+          .map(el => {
+            const r = el.getBoundingClientRect();
+            return { id: el.id || el.className || el.tagName, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+          });
+        const overlaps = [];
+        for (let i = 0; i < controls.length; i++) {
+          for (let j = i + 1; j < controls.length; j++) {
+            const a = controls[i], b = controls[j];
+            if (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) {
+              overlaps.push([a.id, b.id]);
+            }
+          }
+        }
+        const outsideTop = controls.filter(c => c.left < topRect.left - 1 || c.right > topRect.right + 1 || c.top < topRect.top - 1 || c.bottom > topRect.bottom + 1);
+        return {
+          docOverflow: document.documentElement.scrollWidth > window.innerWidth,
+          topOverflow: top.scrollWidth > top.clientWidth + 1,
+          wsBelowTop: ws.getBoundingClientRect().top >= topRect.bottom - 1,
+          sideBelowTop: side.getBoundingClientRect().top >= topRect.bottom - 1,
+          overlaps,
+          outsideTop,
+        };
+      });
+      assert.equal(gsLayout.docOverflow, false, `${label}: Grid Studio horizontal overflow`);
+      assert.equal(gsLayout.topOverflow, false, `${label}: Grid Studio #top overflow`);
+      assert.equal(gsLayout.wsBelowTop, true, `${label}: Grid Studio workspace overlaps #top`);
+      assert.equal(gsLayout.sideBelowTop, true, `${label}: Grid Studio side panel overlaps #top`);
+      assert.deepEqual(gsLayout.overlaps, [], `${label}: Grid Studio #top controls overlap`);
+      assert.deepEqual(gsLayout.outsideTop, [], `${label}: Grid Studio #top controls extend outside #top`);
+    };
+
+    await assertGridLayoutNoOverlap('grid-1440x960');
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setSize(800, 600);
+    });
+    await page.waitForTimeout(300);
+    await assertGridLayoutNoOverlap('grid-800x600');
+    await page.screenshot({ path: path.join(RESULTS_DIR, `grid-studio-800px-${modeLabel}.png`) });
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setSize(1440, 960);
+    });
+    await page.waitForTimeout(250);
+
+    recordCheck('Grid Studio portable settings save/load, #imgName display, Cmd/Ctrl+S shortcut, and 800px/1440px topbar layout', {
+      savedFilename: gsSettingsDl.filename,
+      shortcutFilename: gsShortcutDl.filename,
+    });
 
     // Reload sample for rich visual calibration/lens/warp transformations
+    await gsPageFrame().evaluate(() => selectChip(null));
     await gridFrame.locator('#sample').click();
 
     // 3c. Chip preset calibration (select V12: 200 µm pitch, 170 µm well, 49x49 array)

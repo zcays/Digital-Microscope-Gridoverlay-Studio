@@ -42,7 +42,7 @@ button, input, select { font: inherit; letter-spacing: inherit; }
 #app {
   display: grid; height: 100%; padding: 8px; gap: 8px;
   grid-template-columns: 48px minmax(0,1fr) 320px;
-  grid-template-rows: 52px minmax(0,1fr) 32px;
+  grid-template-rows: auto minmax(0,1fr) 32px;
 }
 #top, #tools, #side, #status, #toast, #help .card {
   background: var(--lg-glass); border: 1px solid var(--lg-border);
@@ -52,8 +52,11 @@ button, input, select { font: inherit; letter-spacing: inherit; }
 }
 #top {
   grid-column: 1/4; display: flex; align-items: center; gap: 8px;
-  min-width: 0; padding: 0 16px; border-radius: 12px;
+  min-width: 0; min-height: 52px; padding: 8px 16px; border-radius: 12px; flex-wrap: wrap;
 }
+#top .identity { display: flex; align-items: center; flex: 1 1 100%; gap: 12px; min-width: 0; }
+#imgName { color: var(--lg-secondary); font-size: 12px; white-space: nowrap; }
+#settingsInfo { padding: 10px 0; border-bottom: 1px solid var(--lg-border); overflow-wrap: anywhere; user-select: text; }
 #top .brand {
   display: flex; align-items: center; gap: 10px; margin-right: 8px;
   font-size: 13px; font-weight: 600; letter-spacing: -.35px;
@@ -65,6 +68,7 @@ button, input, select { font: inherit; letter-spacing: inherit; }
     linear-gradient(transparent 46%,var(--lg-check-border) 46% 51%,transparent 51%);
   box-shadow: inset 0 0 0 5px var(--lg-solid);
 }
+#top .exportControls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 #top .grow, #status .sp { flex: 1; }
 #top .sep { width: 1px; height: 20px; background: var(--lg-border); margin: 0 4px; }
 #tools { display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 10px; }
@@ -205,9 +209,9 @@ kbd { background: var(--lg-field); border: 1px solid var(--lg-border); border-ra
 
 /* Layout and accessibility preferences. */
 @media(max-width:1250px) {
-  #app { grid-template-rows: 86px minmax(0,1fr) 32px; }
+  #app { grid-template-rows: auto minmax(0,1fr) 32px; }
   #top { flex-wrap: wrap; align-content: center; padding: 8px 12px; gap: 6px 8px; }
-  #top .brand { flex-basis: 100%; margin: 0; }
+  #top .brand { margin: 0; }
 }
 @media(max-width:1000px) {
   #app { grid-template-columns: 44px minmax(0,1fr) 292px; }

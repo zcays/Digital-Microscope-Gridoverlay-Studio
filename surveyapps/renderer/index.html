@@ -41,7 +41,7 @@
             </div>
             <div class="brand-text">
               <span class="brand-name">SurveyApps!</span>
-              <span class="brand-subtitle"><span id="app-version" class="version-pill" title="Application version">1.0.2</span></span>
+              <span class="brand-subtitle"><span id="app-version" class="version-pill" title="Application version">1.0.3</span></span>
             </div>
           </div>
 
@@ -327,7 +327,7 @@
                   </div>
                   <div class="spec-item">
                     <dt>Export</dt>
-                    <dd>Full-resolution PNG of the corrected image, reference grid, or combined composite.</dd>
+                    <dd>Full-resolution PNG of the corrected image, reference grid, or combined composite, plus portable alignment settings JSON.</dd>
                   </div>
                 </dl>
 
@@ -552,6 +552,10 @@
                     <strong>GPU &amp; Software Renderers:</strong>
                     Automatically uses WebGL2/WebGL1 hardware shaders and falls back seamlessly to a matching Canvas 2D software renderer if GPU acceleration is unavailable.
                   </li>
+                  <li>
+                    <strong>Filename Display &amp; Portable Settings:</strong>
+                    The top bar displays the loaded image's filename. Use <strong>Save settings…</strong> (<code>⌘/Ctrl+S</code>) and <strong>Load settings…</strong>—or drop a <code>.gridstudio.json</code> file onto the workspace—to save and restore chip selection, alignment, fisheye, distortion, crop, grid, and export options without embedding image pixels.
+                  </li>
                 </ul>
               </article>
 
@@ -611,7 +615,7 @@
                         <tr><td><kbd>G</kbd> / <kbd>\</kbd></td><td>Toggle grid / Toggle original vs corrected</td></tr>
                         <tr><td><kbd>R</kbd> / <kbd>M</kbd></td><td>Reset image / Centre image</td></tr>
                         <tr><td><kbd>+</kbd> <kbd>−</kbd> / <kbd>F</kbd> / <kbd>1</kbd></td><td>Zoom in/out / Fit view / 100% zoom</td></tr>
-                        <tr><td><kbd>⌘/Ctrl</kbd> + <kbd>O</kbd> / <kbd>E</kbd></td><td>Open image / Export full-res PNG</td></tr>
+                        <tr><td><kbd>⌘/Ctrl</kbd> + <kbd>O</kbd> / <kbd>S</kbd> / <kbd>E</kbd></td><td>Open image / Save settings… / Export full-res PNG</td></tr>
                       </tbody>
                     </table>
                   </div>

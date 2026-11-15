@@ -11,6 +11,7 @@ function buildGridPanel() {
 
   checkbox(p, 'Show grid', () => G.visible, set(v => G.visible = v));
   line(p, 'Style', '<select id="gMode"><option value="outline">Outlined squares</option><option value="filled">Filled squares</option></select>');
+  syncs.push(() => $('#gMode').value = G.mode);
   $('#gMode').onchange = e => { G.mode = e.target.value; dirty('grid'); };
 
   // Manual sizing: switched off (greyed + inert) while a chip version is ticked, because the chip dictates shape, size and spacing.
@@ -183,6 +184,7 @@ const ASPECTS = [['Free', 0], ['Same as canvas', -1], ['1 : 1', 1], ['4 : 3', 4 
 function buildCropPanel() {
   const p = $('#p-crop');
   line(p, 'Aspect', `<select id="cRatio">${ASPECTS.map(([t, v]) => `<option value="${v}">${t}</option>`).join('')}</select>`);
+  syncs.push(() => $('#cRatio').value = String(S.ratio));
   $('#cRatio').onchange = e => { S.ratio = +e.target.value; const r = ratioValue(); if (S.crop && r) { fitRatio(r); dirty('crop'); } };
   buttons(p, [['cStart', 'Crop tool', '', () => setTool('crop')], ['cropApply', 'Apply crop', 'primary', applyCrop], ['cCancel', 'Cancel', '', cancelCrop], ['cReset', 'Reset crop', '', resetCrop]]);
   note(p, '', 'cropInfo');                                            // text set by updateCrop()

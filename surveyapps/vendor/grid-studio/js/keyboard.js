@@ -22,7 +22,7 @@ const KEY_ACTIONS = {
   '[': () => nudgeGridSize(-1), ']': () => nudgeGridSize(1), '{': () => nudgeGridSpacing(-1), '}': () => nudgeGridSpacing(1),
   '\\': toggleBypass,                                   // before / after of the fisheye correction
 };
-const MOD_ACTIONS = {z: undoCrop, o: () => $('#file').click(), e: () => $('#export').click()};
+const MOD_ACTIONS = {s: () => saveSettings(), z: undoCrop, o: () => $('#file').click(), e: () => $('#export').click()};
 const ARROW_NUDGE = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]};
 
 addEventListener('keydown', e => {

@@ -32,7 +32,7 @@ Remaining platform caveats:
 - Interactive NSIS GUI wizard/SmartScreen flows on a physical Windows desktop, macOS 14/15 physical hardware, and physical Intel Mac hardware were not separately exercised outside GitHub Actions CI and local macOS 27.0.1 ARM64/Rosetta verification.
 - Linux and universal macOS binaries are outside this delivery.
 
-The app's upstream scientific limits remain: RGB 8-bit conversion, first TIFF frame, partial edge wells excluded, no spectral unmixing/concentration calibration, capped well dropdown, Grid Studio 8192 px document limit, and auto-fit requiring visible regular arrays. Lab configuration JSON does not embed source images or measurements. Grid Studio has no upstream full-project persistence.
+The app's upstream scientific limits remain: RGB 8-bit conversion, first TIFF frame, partial edge wells excluded, no spectral unmixing/concentration calibration, capped well dropdown, Grid Studio 8192 px document limit, and auto-fit requiring visible regular arrays. Lab configuration JSON does not embed source images or measurements. Grid Studio alignment settings JSON does not embed source images, view state or undo history.
 
 `npm audit` reports six moderate transitive **build-tool-only** minimatch advisories; production npm dependencies are empty and those packages are not shipped as application JS. No forced downgrade/major-version override was applied. Maintain Electron/Python/dependencies with regression tests before future distribution.
 
@@ -54,6 +54,12 @@ Use `SURVEYAPPS_TEST_EXECUTABLE` to test an installed binary and `SURVEYAPPS_TES
 The testing delegate's narrative summary used wrong environment versions, nonexistent API names and incorrect baseline causes. The lead replaced that prose with facts from the actual test code, JSON outputs and independent reruns. No nonexistent two-point calibration, custom fluorophore weighting UI or HTTP shutdown endpoint is claimed here.
 
 The E2E harness now checks error arrays again after teardown. Connection resets/empty responses caused specifically by intentional quit are classified as expected; other late errors still fail. It also waits for the restarted Dash workspace to render before ending the recovery test. This prevents a premature PASS while asynchronous teardown events are still arriving.
+
+## Release `v1.0.3` (2026-11-15)
+
+Adds portable Grid Studio alignment settings save/load (including the ⌘/Ctrl+S shortcut and workspace JSON drop) and top-bar image filename display. Source, app version, lockfile, installation instructions and installer filenames are updated together. The prior local-only 1.0.2 settings build is superseded by this distinct release version. Keep the original image and custom chip lists separately from settings files.
+
+Local release checks: the source Grid Studio suite passed 158/158 with no page errors (including both private real-photo checks); Python unit/service tests passed 9/9. The preceding local settings integration passed all 9 packaged desktop groups with 158/158 embedded self-tests. A fresh 1.0.3 local installer build and cross-platform CI validation are in progress; results are linked from the published release with SHA256SUMS.txt.
 
 ## Release `v1.0.2` (2026-11-15)
 
@@ -92,3 +98,12 @@ SHA-256 values for all release downloads are recorded in `SHA256SUMS.txt` on the
 - Corrected E2E startup predicate in `tests/desktop.cjs` that still required the removed synthetic-image axis range; now explicitly requires empty plot/no image plus upload prompt. Subsequent real uploads and six export types passed.
 - 32 packaged host/renderer/Grid files match source, no ASAR sample entries, strict ad-hoc signature verification (`codesign --verify --deep --strict`), `hdiutil verify`, and `unzip -tq` passed. Updated app/DMG/ZIP in `dist-local`, version `1.0.1` retained. No commits/pushes/publication. Intel/Windows not rebuilt.
 
+## Grid Studio portable settings & image filename integration (`v1.0.2`, 2026-11-15, local ARM64)
+- Synced `vendor/grid-studio/` from `grid-studio/` (`a784c4d` plus uncommitted working-tree changes including `js/settings.js`) via `scripts/sync_grid_studio.py` (`Verified 26 public Grid Studio files`; `diff -rq grid-studio surveyapps/vendor/grid-studio` reported only `samples` missing).
+- `node tests/original-grid.cjs --vendor`: title `PASS`, `158 / 158 passed`, `errors: []`. The two real-photo tests (`samples/v12-example.jpg` and `samples/v11-tissue-example.jpg`) were skipped cleanly because `samples/` is not vendored.
+- `.venv/bin/python -u -m unittest discover -s tests -p "test_*.py" -v`: `Ran 9 tests ... OK` (9/9 pass).
+- `node tests/backend-lifecycle.cjs`: `PASS missing bundled executable produces actionable startup error; cleanup is idempotent`.
+- `node tests/desktop.cjs` (dev mode): `DEV SUITE PASSED (9 checks)`, `unexpectedPageErrors: []`, `unexpectedConsoleErrors: []`, `unexpectedHttp500s: []`, including `js/settings.js` protocol delivery, `#imgName` display (`Sample image` and `fixture_rgb.png`), `Save settings…` download (`fixture_rgb.gridstudio.json`, `kind: "grid-studio-settings"`), `Load settings…` state restoration (`V3.1`, rotation `12.5`), `Cmd/Ctrl+S` shortcut saving without menu collision or page reload, embedded `tests.html` (`158 / 158 passed`), and 800×600 / 1440×960 no-overlap layout verification with inspected screenshots (`test-results/desktop-dev.json`).
+- Local macOS ARM64 rebuild into `dist-local/`: `SurveyApps!.app`, `SurveyApps-1.0.2-mac-arm64.dmg`, `SurveyApps-1.0.2-mac-arm64.zip`. `npx asar list` confirms `/vendor/grid-studio/js/settings.js` is packaged and zero `samples` paths exist. `codesign --verify --deep --strict` passed.
+- Packaged E2E (`SURVEYAPPS_TEST_EXECUTABLE=.../dist-local/mac-arm64/SurveyApps!.app/Contents/MacOS/SurveyApps! SURVEYAPPS_TEST_LABEL=packaged-local node tests/desktop.cjs --packaged`): `PACKAGED-LOCAL SUITE PASSED (9 checks)` (`test-results/desktop-packaged-local.json`), `158 / 158 passed` in embedded `tests.html` (same two real-photo skips), zero unexpected errors, zero orphan backend processes, and inspected 800×600 / 1440×960 screenshots.
+- Not verified in this local run: macOS Intel (`x64`) and Windows (`x64`) builds (CI-only, not triggered).
