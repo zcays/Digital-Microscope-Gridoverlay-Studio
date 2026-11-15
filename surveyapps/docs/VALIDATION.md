@@ -10,8 +10,7 @@ Native host: Apple silicon, macOS 27.0.1 (Darwin 27.0.0). Minimum configured mac
 
 ## Test evidence
 
-- **Original App A:** 98/100. Two pre-existing failures: distortion-only auto-fix accepted gross misalignment; the following mesh assertion then failed. There were zero page errors. The original user's optional real-photo check passed. The original files were preserved, not adjusted to force a green result.
-- **Integrated App A:** 100/100, including GPU/software parity, chip geometry/calibration, crop/export and synthetic auto-fit/distortion tests. One optional real-photo test is recorded as skipped/passing because photos are excluded from the package. No user photos are shipped.
+- **Integrated App A (Grid Studio `e6ba1c4`):** 123/123 with zero page errors (`node tests/original-grid.cjs --vendor`, local macOS ARM64, 2026-11-13), including GPU/software parity, chip geometry/calibration, crop/export (incl. crop on a rotated image), synthetic auto-fit/distortion tests and tissue-covered photos for every chip version. The two real-photo tests are recorded as skipped/passing because photos are excluded from the package. No user photos are shipped. (The earlier snapshot scored 100/100 with one SurveyApps patch; that patch is no longer needed.)
 - **Python suite:** 8/8. Exact known-pixel outputs for all existing channel formulas; rectangular spacing and placed-origin consistency; well/grid/merged PNGs; row labels; JSON settings round-trip/validation; PNG/JPEG/TIFF and corrupt-image HTTP callbacks; heatmap schema; frozen service authentication and dynamic port; stdin shutdown and parent EOF cleanup.
 - **Packaged desktop E2E:** eight test groups. Dashboard and 800×600/1440×960 layouts; both embedded tools; image upload; Grid Studio sample/calibration/rotation/scale/lens/warp/crop and PNG export; integrated tests.html; Lab channels/heatmap and six export types; configuration save/load; persistent navigation; backend crash/retry while Grid Studio stays available; zero leftover backend processes.
 - **Startup failure:** missing bundled executable yields an actionable error and cleanup can be called repeatedly without failure (`backend-lifecycle.log`).
@@ -21,9 +20,17 @@ Native host: Apple silicon, macOS 27.0.1 (Darwin 27.0.0). Minimum configured mac
 
 Machine-readable results and raw logs are in `test-results/` (local evidence, git-ignored). `desktop-dmg-arm64-final.json` is the native installed-DMG run; `desktop-dmg-x64-rosetta.json` records the installed Intel DMG run under Rosetta (8/8 groups, zero unexpected errors after quit). Both binaries and frozen backend architectures were checked with `file`. Source archive includes the selected final evidence.
 
-## Limits and unbuilt targets
+## Limits and remaining platform caveats
 
-Windows installer EXE and portable ZIP have **not been built or tested**. A macOS Python freeze cannot supply a Windows Python runtime. The manual-only Windows x64 GitHub Actions job builds its own frozen Python backend, produces NSIS EXE and ZIP, then runs tests. It has not been triggered. Intel macOS app, DMG and ZIP were built; full installed-DMG tests passed through Rosetta, not on a physical Intel Mac. Linux and universal macOS binaries are outside this delivery.
+GitHub Actions workflow run [`43512412391`](https://github.com/zcays/SurveyApps/actions/runs/43512412391) built and tested all three release targets cleanly:
+- **`macos-15` (ARM64):** PyInstaller freeze + `8/8` Python tests + `electron-builder` (`.dmg` / `.zip`) + `tests/backend-lifecycle.cjs` + `tests/desktop.cjs --packaged` (`8/8` checks, `100/100` Grid Studio self-tests).
+- **`macos-15-intel` (x64):** PyInstaller freeze + `8/8` Python tests + `electron-builder` (`.dmg` / `.zip`) + `tests/backend-lifecycle.cjs` + `tests/desktop.cjs --packaged` (`8/8` checks, `94/94` Grid Studio self-tests via Canvas 2D software fallback because the headless Intel runner lacked WebGL).
+- **`windows-2025` (x64):** PyInstaller freeze + `8/8` Python tests + `electron-builder` (NSIS `.exe` / portable `.zip`) + `tests/backend-lifecycle.cjs` + `tests/desktop.cjs --packaged` (`7/7` checks against unpacked `SurveyApps!.exe` with `100/100` Grid Studio self-tests; Unix `pgrep` check skipped on Windows).
+
+Remaining platform caveats:
+- macOS builds are ad-hoc integrity signed (`codesign --verify --deep --strict`), **not** Developer ID signed or Apple notarized; Windows builds are unsigned (no Authenticode certificate).
+- Interactive NSIS GUI wizard/SmartScreen flows on a physical Windows desktop, macOS 14/15 physical hardware, and physical Intel Mac hardware were not separately exercised outside GitHub Actions CI and local macOS 27.0.1 ARM64/Rosetta verification.
+- Linux and universal macOS binaries are outside this delivery.
 
 The app's upstream scientific limits remain: RGB 8-bit conversion, first TIFF frame, partial edge wells excluded, no spectral unmixing/concentration calibration, capped well dropdown, Grid Studio 8192 px document limit, and auto-fit requiring visible regular arrays. Lab configuration JSON does not embed source images or measurements. Grid Studio has no upstream full-project persistence.
 
@@ -48,14 +55,36 @@ The testing delegate's narrative summary used wrong environment versions, nonexi
 
 The E2E harness now checks error arrays again after teardown. Connection resets/empty responses caused specifically by intentional quit are classified as expected; other late errors still fail. It also waits for the restarted Dash workspace to render before ending the recovery test. This prevents a premature PASS while asynchronous teardown events are still arriving.
 
-## Final artifacts
+## Release `v1.0.1` (2026-11-14)
 
-- `SurveyApps-1.0.0-mac-arm64.dmg` — Apple silicon installer; 168,767,186 bytes.
-- `SurveyApps-1.0.0-mac-arm64.zip` — standalone Apple silicon app archive; 165,667,211 bytes.
-- `SurveyApps-1.0.0-mac-x64.dmg` — Intel installer; 178,002,946 bytes.
-- `SurveyApps-1.0.0-mac-x64.zip` — standalone Intel app archive; 174,856,272 bytes.
+Same application with the bundled Grid Studio updated to `e6ba1c4`. Installers (`SurveyApps-1.0.1-mac-arm64.dmg/.zip`, `-mac-x64.dmg/.zip`, `-win-x64.exe/.zip`) were built by the GitHub Actions workflow on `macos-15`, `macos-15-intel` and `windows-2025`, each passing the Python suite, the backend lifecycle test and the packaged desktop E2E (which runs the embedded Grid Studio self-tests). The run is linked in the release notes; SHA-256 values are in that release's `SHA256SUMS.txt`. Not repeated for 1.0.1: the local installed-DMG / Rosetta checks described for 1.0.0.
+
+## Earlier release artifacts (`v1.0.0`)
+
+- `SurveyApps-1.0.0-mac-arm64.dmg` — Apple silicon installer; 169,732,558 bytes (CI run `43512412391`).
+- `SurveyApps-1.0.0-mac-arm64.zip` — standalone Apple silicon app archive; 166,634,168 bytes (CI run `43512412391`).
+- `SurveyApps-1.0.0-mac-x64.dmg` — Intel installer; 178,434,136 bytes (CI run `43512412391`).
+- `SurveyApps-1.0.0-mac-x64.zip` — standalone Intel app archive; 175,237,962 bytes (CI run `43512412391`).
+- `SurveyApps-1.0.0-win-x64.exe` — Windows x64 NSIS installer; 169,210,418 bytes (CI run `43512412391`).
+- `SurveyApps-1.0.0-win-x64.zip` — Windows x64 portable archive; 211,867,693 bytes (CI run `43512412391`).
 - `SurveyApps-1.0.0-source.zip` — source, assets, locks, workflow and selected validation evidence; no development runtimes, photos or machine folders.
 
-SHA-256 values are in `dist/SHA256SUMS.txt`. The unpacked `.app` bundles are in `dist/mac-arm64/` and `dist/mac/`. Installer copying was tested outside the workspace with no Node/Python on the app PATH. ZIP contents were verified against the same built bundles; a separate ZIP drag-install flow was not exercised.
+SHA-256 values for all release downloads are recorded in `SHA256SUMS.txt` on the `v1.0.0` GitHub Release. Local macOS DMG installer copying was tested outside the workspace with no Node/Python on the app PATH (`desktop-dmg-arm64-final.json` and `desktop-dmg-x64-rosetta.json`). CI accepts a successful upstream self-test title/count when a host lacks WebGL and explicitly records skipped checks rather than requiring the native GPU count.
 
-The Intel JSON report’s top-level `arch` describes the ARM64 test driver; the executed app and its Python backend are x86_64 Mach-O files (see `test-results/architectures.txt`). Subsequent harness runs also record Electron runtime architecture separately. CI accepts a successful upstream self-test title/count when a host lacks WebGL and explicitly records skipped checks rather than requiring the native GPU count.
+2026-11-15 continuation: Python science 8/8 OK; neutral shell/Lab CSS applied and backend refrozen. Local ARM64 packaging and dev E2E were started; final results not yet established. Source/vendor standalone selftests stalled awaiting completion, cause unresolved. Packaged E2E, visual QA, ASAR equality/signature/sample checks remain required before readiness can be claimed. See latest AGENT_HANDOFF.md entry.
+
+
+## Final local monochrome integration verification (2026-11-15)
+- Source and vendor Chromium self-tests completed: 132/132 PASS, no page errors. The preceding report of stalled runs was premature: those same processes finished successfully. Earlier virtual-time/dump-DOM incomplete runs were not reproduced or conclusively diagnosed; no claim of a startup bug fix.
+- Python science 8/8 PASS; backend refrozen. Dev E2E 8/8 PASS and rebuilt ARM64 packaged E2E 8/8 PASS, zero unexpected page/console/HTTP500 errors, zero orphan backend processes. Packaged evidence: test-results/desktop-glass-final.json; screenshots use glass-final suffix.
+- Independently inspected desktop/compact dashboard, embedded Grid Studio and Fluorescence Lab screenshots. White primary actions and neutral controls are readable; navigation/status are separate. Scientific colors, status indicators and decorative artwork retain color.
+- 32 packaged renderer/desktop/Grid Studio files byte-match source; packaged Lab CSS byte-matches source. No samples in ASAR or ZIP. Strict recursive ad-hoc signature verification, DMG checksum verification and full ZIP CRC test passed.
+- Current artifacts: surveyapps/dist-local/mac-arm64/SurveyApps!.app, surveyapps/dist-local/SurveyApps-1.0.1-mac-arm64.dmg and .zip. Version retained at 1.0.1; local build only, no commit/push/publication/CI. Intel/Windows not rebuilt for this UI update; no Developer ID signing/notarization. This final record supersedes the preceding incomplete-validation checkpoint.
+
+## Empty workspaces and dimmed upload prompt (2026-11-15)
+- Removed automatic Lab purple/green demo (`backend/microscopy_app.py`, `tests/test_empty.py`). Before upload the plot is neutral (`#181818`) with an `"Upload image to begin"` prompt; compute/crop/rotate/export cannot fabricate sample measurements. Uploaded-image workflows and `_uploaded_image` monkeypatching remain unchanged. Optional Grid Studio sample (`grid-studio/js/images.js`, synced to `surveyapps/vendor/grid-studio/`) is now grayscale.
+- Grid Studio `#hint` (`grid-studio/css/style.css`, synced to `surveyapps/vendor/grid-studio/`) now sits above an 88% dark canvas overlay (`rgba(18,18,18,.88)`, `z-index: 10`, `pointer-events: none`). It does not intercept pointer/drop events; failed image decoding keeps it visible and successful `setImage()` removes both text and dimming. Toolbar/settings remain usable.
+- Source and vendor self-tests: **132 / 132 PASS** (`test-results/original-grid.json`, `test-results/vendor-grid.json`); Python unit suite: **9 / 9 PASS** (includes `tests/test_empty.py`). Sequential dev E2E (`test-results/desktop-dev.json`) **8 / 8 PASS** and final rebuilt ARM64 packaged E2E (`test-results/desktop-empty-final.json`) **8 / 8 PASS**, zero unexpected page/console/HTTP500 errors and zero orphans. Inspected `grid-empty-empty-final.png`, `grid-studio-empty-final.png`, `lab-empty-empty-final.png`, and `fluorescence-lab-empty-final.png`.
+- Corrected E2E startup predicate in `tests/desktop.cjs` that still required the removed synthetic-image axis range; now explicitly requires empty plot/no image plus upload prompt. Subsequent real uploads and six export types passed.
+- 32 packaged host/renderer/Grid files match source, no ASAR sample entries, strict ad-hoc signature verification (`codesign --verify --deep --strict`), `hdiutil verify`, and `unzip -tq` passed. Updated app/DMG/ZIP in `dist-local`, version `1.0.1` retained. No commits/pushes/publication. Intel/Windows not rebuilt.
+

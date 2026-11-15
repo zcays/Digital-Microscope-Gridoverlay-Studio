@@ -18,6 +18,7 @@
     <button id="helpBtn" title="Keyboard shortcuts (?)">Shortcuts ?</button>
     <label class="chk"><input id="exImg" type="checkbox" checked> image</label>
     <label class="chk"><input id="exGrid" type="checkbox" checked> grid</label>
+    <label class="chk"><input id="exArray" type="checkbox"> array only</label>
     <button id="export" class="primary">Export PNG</button>
   </div>
 
@@ -59,7 +60,7 @@
       <p><kbd>← → ↑ ↓</kbd> nudge image 1 px</p><p><kbd>Shift</kbd>+arrows ×10 · <kbd>Alt</kbd>+arrows ×0.1</p>
       <p><kbd>A</kbd> auto-fit image to the chip grid</p><p><kbd>R</kbd> reset image · <kbd>M</kbd> centre image</p><p><kbd>\</kbd> show original / corrected</p>
       <h4>Tools</h4>
-      <p><kbd>V</kbd> move · <kbd>D</kbd> distort · <kbd>C</kbd> crop</p><p>Distort: drag corner / side · <kbd>Alt</kbd>+side bends</p><p><kbd>Enter</kbd> apply crop (image only) · <kbd>Esc</kbd> cancel</p><p><kbd>⌘/Ctrl</kbd>+<kbd>Z</kbd> undo crop</p>
+      <p><kbd>V</kbd> move · <kbd>D</kbd> distort · <kbd>C</kbd> crop</p><p>Distort: drag corner / side · <kbd>Alt</kbd>+side bends</p><p><kbd>Enter</kbd> apply crop (image only) · <kbd>Esc</kbd> cancel</p><p>Crop to array (Crop panel / “array only”): export exactly the wells</p><p><kbd>⌘/Ctrl</kbd>+<kbd>Z</kbd> undo crop</p>
     </div>
     <div>
       <h4>Grid</h4>
@@ -79,7 +80,10 @@
 <!-- Classic scripts (not ES modules) so the app also works when opened straight from disk. ORDER MATTERS:
      they share one global scope; state.js first, main.js last (it starts the app). See ../ARCHITECTURE.md. -->
 <script src="js/state.js"></script>     <!-- S, registries, redraw scheduler -->
-<script src="js/presets.js"></script>   <!-- chip versions + µm scale -->
+<script>var CHIPS_FILE_ERROR = null; addEventListener('error', function (e) { if (/chips\.js(\?|$)/.test(e.filename || '')) CHIPS_FILE_ERROR = 'line ' + e.lineno + ': ' + e.message; });</script>   <!-- remembers a mistake in chips.js so the Chip version panel can show it -->
+<script src="chips.js"></script>        <!-- editable built-in chip versions table -->
+<script src="js/presets.js"></script>   <!-- µm scale of the ticked chip, tick / fit a chip -->
+<script src="js/chiplist.js"></script>  <!-- the chip list: validate, load JSON/CSV, remember -->
 <script src="js/actions.js"></script>   <!-- small shared commands -->
 <script src="js/warp.js"></script>      <!-- Distort tool -->
 <script src="js/gl.js"></script>        <!-- WebGL image layer (GPU) -->
@@ -90,7 +94,8 @@
 <script src="js/view.js"></script>      <!-- zoom, status bar, µm ruler -->
 <script src="js/crop.js"></script>      <!-- Crop tool -->
 <script src="js/cv.js"></script>        <!-- vision toolbox (blur, FFT, phase, solver) -->
-<script src="js/autofit.js"></script>   <!-- Auto-fit image to the chip grid -->
+<script src="js/autofit.js"></script>   <!-- Auto-fit analysis (pure) -->
+<script src="js/autofit-app.js"></script>   <!-- Auto-fit buttons: run, apply, undo, messages -->
 <script src="js/ui.js"></script>        <!-- widget helpers -->
 <script src="js/panels.js"></script>    <!-- settings panels -->
 <script src="js/tools.js"></script>     <!-- tools + mouse -->

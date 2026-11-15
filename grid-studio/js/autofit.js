@@ -1,22 +1,29 @@
 'use strict';
-/* autofit.js — "Auto-fit image to grid": looks at the photo, finds the chip's well lattice and sets tilt, scale, position,
- * fisheye strength and the distortion handles so the photo lines up with the ticked chip version's grid. One button, no clicking on wells.
+/* autofit.js — the ANALYSIS behind "Auto-fit image to grid": looks at the photo, finds the chip's well lattice and returns the tilt,
+ * scale, position, fisheye strength, distortion handles and fine mesh that line the photo up with the ticked chip version's grid.
+ * Pure: afCompute() reads pixels and returns numbers, it never touches app state. Applying the result, the buttons, undo and the
+ * messages are in autofit-app.js. Vision helpers (blur, FFT, phase, solver) are in cv.js.
  *
- * HOW IT WORKS (vision helpers are in cv.js; this file is the chip-specific part)
- *  1. Lattice frequency: the wells repeat, so the 2-D spectrum of the edge image has two perpendicular peaks → pitch (px) and tilt.
- *  2. Demodulation: for each of the two wall directions compute the local PHASE of that repetition. "f·r + phase" is a continuous
- *     wall index (integer on every wall). It does not care whether walls look dark or bright, only that they repeat.
- *  3. Unwrap the phase from the strongest area outwards → wall indices that are consistent across the array (seed data).
- *  4. Fit the app's own image model (lens k1 → rotate/scale/translate → distortion handles) so that every sample lands on its wall.
- *     Tilt/scale/position are fitted first, THEN the distortion handles with tilt/scale frozen (fitting both at once is degenerate).
- *  5. Which wall is the first one? The array is found as the block where BOTH directions repeat; the exact first/last wall is chosen
- *     by the line energy at the candidate edge walls. The chip's well count (wide × long) fixes the block size.
- *  6. Refit on all samples inside the array with wrapped (mod 1) residuals, re-check the edges, add edge bows, report the error.
+ * HOW IT WORKS (the numbered comments inside afComputeOnce follow this list)
+ *  1. Pitch and tilt: the wells repeat, so the spectrum of the picture (edge strength AND brightness) has two perpendicular peaks.
+ *  2. Local phase of each wall direction, from two measurements combined by signal-to-noise: the EDGES (sharp, know where the wall is)
+ *     and the BRIGHTNESS ripple (keeps faint wells under tissue). "f·r + phase" is a wall index: a whole number on every wall.
+ *     A presence map (is the phase orderly here?) says where wells can be seen at all; it does not depend on contrast.
+ *  3. Unwrap the phase patch by patch → absolute wall numbers. The largest patch is the reference; the others are joined once a model
+ *     can tell their whole-wall offsets (tissue rims and opaque areas cut the pattern into patches).
+ *  4. Fit the app's own image model so every sample lands on its wall: tilt/scale/position → + lens → distortion corners with
+ *     tilt/scale FROZEN (fitting both at once is degenerate).
+ *  5. Which wall is the first one? Per lattice column, "are there wells in it" (cross-walls) is measured; a box of N columns is placed so
+ *     that no wells are left outside and its ends sit on a step from wells to none. One visible edge per direction is enough.
+ *  6. Polish on all samples inside the array (absolute wall numbers where known, otherwise mod 1), edge bows, then the fine mesh.
+ *  7. Refuse rather than guess: error too large, too few samples matched, wells continuing beyond the array (wrong chip), side errors.
+ *     For non-square chips both orientations are tried (afCompute) and the better one kept.
  *
  * afForward() MUST mirror the renderers: if the image maths in gl.js / cpu.js / warp.js changes, change it here too
- * (tests.html fits a synthetic chip and then checks the rendered picture against the grid).
- * Troubleshooting: after a run, AF.debug in the browser console holds the internals (peaks, extents, per-stage errors, first walls).
- * Units: source-image px in, canvas px out; "lattice" coordinates are in pitches, with walls 0..N on the integers. */
+ * (tests.html fits synthetic chips with known geometry and checks where the array corners land).
+ * Thresholds: the AF object below. Troubleshooting: after a run, AF.debug holds the internals (peaks, presence map, per-stage errors,
+ * wellProfile = wells per column/row, joined patches, first walls).
+ * Units: source-image px in, canvas px out; "lattice" coordinates are in periods, with walls 0..N on the whole numbers. */
 
 const AF = {
   pxPerWell: 28,            // working resolution: about this many px per well if the array filled the frame
@@ -469,66 +476,3 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
   if (median > AF.maxMedianError || inliers < AF.minInliers) return {ok: false, reason: `The wells were found but could not be lined up reliably (typical error ${(median / q * 100).toFixed(0)}% of a well).`, stats};
   return {ok: true, th, mesh, stats};
 }
-
-/* ---------------- app glue ---------------- */
-let afUndoState = null;
-const afSnapshot = () => ({lens: {...S.lens}, img: {x: S.img.x, y: S.img.y, scale: S.img.scale, rot: S.img.rot}, warp: JSON.parse(JSON.stringify(S.warp))});
-function afRestore(s) { if (s.layout) { Object.assign(S.chip, s.layout.chip); Object.assign(S.doc, s.layout.doc); S.zoom = s.layout.zoom; refresh('grid', 'layout', 'crop'); } Object.assign(S.lens, s.lens); Object.assign(S.img, s.img); Object.assign(S.warp, JSON.parse(JSON.stringify(s.warp))); refresh('gl', 'warp', 'status'); }
-/** Current image settings as a parameter vector (the inverse of afApply). */
-function afCurrent() {
-  const c = S.warp.c, d = S.warp.dev;
-  return [S.lens.bypass ? 0 : S.lens.k1, S.lens.bypass ? 0 : S.lens.k2, S.img.rot, S.img.scale, S.img.x, S.img.y,
-          c.nw.x, c.nw.y, c.ne.x - 1, c.ne.y, c.se.x - 1, c.se.y - 1, c.sw.x, c.sw.y - 1, d.n.x, d.n.y, d.e.x, d.e.y, d.s.x, d.s.y, d.w.x, d.w.y];
-}
-function afApply(res, distortionOnly) {
-  const t = res.th;
-  if (!distortionOnly) { Object.assign(S.lens, {k1: t[AF_K1], k2: t[AF_K2], bypass: false}); Object.assign(S.img, {rot: t[AF_ROT], scale: t[AF_SCALE], x: t[AF_X], y: t[AF_Y]}); }
-  Object.assign(S.warp, {enabled: true, mesh: res.mesh,
-    c: {nw: {x: t[6], y: t[7]}, ne: {x: 1 + t[8], y: t[9]}, se: {x: 1 + t[10], y: 1 + t[11]}, sw: {x: t[12], y: 1 + t[13]}},
-    dev: {n: {x: t[14], y: t[15]}, e: {x: t[16], y: t[17]}, s: {x: t[18], y: t[19]}, w: {x: t[20], y: t[21]}}});
-  refresh('gl', 'warp', 'status');
-}
-
-/** Run the analysis on the loaded image for the ticked chip and apply the result. distortionOnly = keep tilt / size / position / lens
- *  and only re-fit the distortion (handles + fine mesh) from where the image is now. Returns the result object. */
-function autoFitNow(distortionOnly = false) {
-  const P = activePreset();
-  if (!S.img.el) return {ok: false, reason: 'Load an image first.'};
-  if (!P) return {ok: false, reason: 'Tick the chip version first, so I know which grid to fit.'};
-  const before = afSnapshot();
-  if (!S.chip.fit) before.layout = {chip: JSON.parse(JSON.stringify(S.chip)), doc: {...S.doc}, zoom: S.zoom};
-  let res;
-  try {
-    if (!S.chip.fit) setChipFit(true);                            // the array needs a defined place on the canvas
-    const L = gridLayout(S.doc.w, S.doc.h);
-    res = afCompute(S.img.el, S.img.w, S.img.h, P, {x0: L.x0, y0: L.y0, pitch: L.pitchX, size: L.size}, S.doc, S.lens, distortionOnly ? {th: afCurrent()} : null);
-  } catch (err) { if (before.layout) afRestore(before); throw err; }
-  if (!res.ok) { if (before.layout) afRestore(before); return res; }
-  afUndoState = before;
-  afApply(res, distortionOnly);
-  return res;
-}
-function afMessage(res, distortionOnly) {
-  if (!res.ok) return `${distortionOnly ? 'Auto-fix distortion' : 'Auto-fit'} did not change anything. ${res.reason}`;
-  const s = res.stats, pct = v => (v * 100).toFixed(0) + '%', worst = Math.max(...Object.values(s.sideErr).filter(v => v === v), 0);
-  const head = distortionOnly ? 'Distortion fixed' : `Auto-fit done: tilt ${(-s.tiltDeg).toFixed(1)}° removed`;
-  let msg = `${head}. Typical error ${s.medianImagePx.toFixed(1)} px (${pct(s.medianWell)} of a well; ${pct(s.medianHandlesOnly / s.harmonic)} before the fine correction), worst side ${pct(worst)}, ${pct(s.inliers)} of the visible wells matched.`;
-  if (s.visible < .9) msg += ` Wells were clearly seen in ${pct(s.visible)} of the array; the rest (covered or faint) is placed from those.`;
-  const check = [];
-  if (s.edgeSure[0] < AF.minEdgeSure) check.push('the left/right edges of the array could not be located confidently, so it may sit a whole well off sideways');
-  if (s.edgeSure[1] < AF.minEdgeSure) check.push('the top/bottom edges of the array could not be located confidently, so it may sit a whole well off up/down');
-  if (s.hiddenCorners.length) check.push(`the ${s.hiddenCorners.join(' and ')} corner${s.hiddenCorners.length > 1 ? 's are' : ' is'} covered, faint or outside the view`);
-  if (check.length) msg += ` Please check by eye: ${check.join('; ')}. Arrow keys nudge the image.`;
-  return msg;
-}
-/** Button / shortcut entry points: show progress and the outcome. */
-function afRun(distortionOnly) {
-  const say = t => { for (const id of ['#autoFitInfo', '#warpFixInfo']) { const e = $(id); if (e) e.textContent = t; } };
-  say('Analysing the picture…'); toast('Analysing the picture…');
-  setTimeout(() => {                                               // let the message paint before the heavy work
-    let res; try { res = autoFitNow(distortionOnly); } catch (err) { console.error(err); res = {ok: false, reason: 'An internal error occurred (see the browser console).'}; }
-    const msg = afMessage(res, distortionOnly); toast(msg); say(msg); syncAll();
-  }, 40);
-}
-const autoFit = () => afRun(false), autoFixDistortion = () => afRun(true);
-function undoAutoFit() { if (!afUndoState) return; afRestore(afUndoState); afUndoState = null; for (const id of ['#autoFitInfo', '#warpFixInfo']) { const e = $(id); if (e) e.textContent = 'Undone.'; } syncAll(); }

@@ -5,6 +5,8 @@
  *   chip ticked → shape/size/pitch come from the chip table × pxPerUm() (true to scale). Either just the real N×M array centred
  *                 (S.chip.fit) or tiled across the whole canvas.
  *   no chip     → manual sliders: size, gaps, dead-space margins, cols/rows.
+ * arrayRect() = the chip array's outer edge (wells + half a wall); arrayCropRect() = the same in whole canvas px while "Crop to array"
+ *   (S.chip.arrayOnly) is on. Showing / exporting only that rectangle is done in crop.js (updateArrayMask) and export.js.
  * gridLayout() returns {shape, size, pitchX, pitchY, i0..i1, j0..j1, x0, y0} in canvas px; cell (i,j) is at x0+i·pitchX, y0+j·pitchY.
  * Line width: S.grid.stroke × max(1, canvasWidth/1200) — see gridLineWidth().
  * drawGrid() never clears (it paints over what is there); renderGrid() clears the overlay canvas first.
@@ -15,6 +17,19 @@ const MAX_CELLS = 400000;
 /** Index range of cells (origin + i*pitch) that touch [0, total]; cells cut by the edge are included. */
 const tileRange = (origin, size, pitch, total) => [Math.floor((-size - origin) / pitch) + 1, Math.ceil((total - origin) / pitch)];
 
+/** The chip array's OUTER EDGE on the canvas: every well plus half a wall all the way round (= wide × long whole pitches), in canvas px.
+ *  null unless a chip is ticked with "Fit canvas to array" (only then does the array have a definite place). */
+function arrayRect() {
+  const P = activePreset(); if (!P || !S.chip.fit) return null;
+  const L = gridLayout(S.doc.w, S.doc.h); if (!L) return null;
+  return {x: L.x0 - (L.pitchX - L.size) / 2, y: L.y0 - (L.pitchY - L.size) / 2, w: P.wide * L.pitchX, h: P.long * L.pitchY};
+}
+/** The same rectangle in WHOLE canvas pixels and limited to the canvas (what "Crop to array" shows and exports), or null when it is off / not available. */
+function arrayCropRect() {
+  const r = S.chip.arrayOnly ? arrayRect() : null; if (!r) return null;
+  const x0 = clamp(Math.round(r.x), 0, S.doc.w), y0 = clamp(Math.round(r.y), 0, S.doc.h), x1 = clamp(Math.round(r.x + r.w), 0, S.doc.w), y1 = clamp(Math.round(r.y + r.h), 0, S.doc.h);
+  return x1 > x0 && y1 > y0 ? {x: x0, y: y0, w: x1 - x0, h: y1 - y0} : null;
+}
 /** Describe the grid to draw: cell shape/size/pitch, first cell position and the index ranges. */
 function gridLayout(w, h) {
   const G = S.grid, P = activePreset();

@@ -7,20 +7,33 @@
 function frame() {
   rafId = 0;
   const f = dirtyFlags;
+  if (f.sync) { flushSyncAll(); f.sync = false; }
   if (f.layout) { layout(); f.layout = false; f.gl = true; }
   if (f.gl) { renderImage(); f.gl = false; }
   if (f.grid) { renderGrid(); f.grid = false; }
   if (f.crop) { updateCrop(); f.crop = false; }
   if (f.warp) { updateWarpUI(); f.warp = false; }
   if (f.status) { updateStatusBar(); f.status = false; }
+  updateArrayMask();                                             // "Crop to array" (cheap; depends on chip, canvas and grid offsets)
 }
 
 function wireTopBar() {
-  $('#file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+  const fileIn = $('#file'), cbArray = $('#exArray');
+  fileIn.onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+  dom.emptyHint.onclick = e => { if (e.button === 0 && !panMode && !S.img.el) fileIn.click(); };
   $('#sample').onclick = loadSample;
   $('#undo').onclick = undoCrop;
   $('#export').onclick = exportPng;
   $('#helpBtn').onclick = () => toggleHelp();
+  cbArray.onchange = e => setArrayOnly(e.target.checked);            // same setting as "Crop to array" in the Crop panel
+  syncs.push(() => {
+    const ok = !!arrayRect(), title = ok
+      ? 'Show and export exactly the array: all wells plus half a wall around them, nothing more (same as “Crop to array” in the Crop panel)'
+      : 'Tick a chip version (with "Fit canvas to array") to use this';
+    cbArray.checked = S.chip.arrayOnly && ok;
+    cbArray.disabled = !ok;
+    if (cbArray.parentElement.title !== title) cbArray.parentElement.title = title;
+  });
   document.querySelectorAll('.tool').forEach(b => b.onclick = () => setTool(b.dataset.tool));
   $('#zIn').onclick = zoomIn; $('#zOut').onclick = zoomOut; $('#zFit').onclick = fitZoom; $('#z100').onclick = () => setZoom(1);
 

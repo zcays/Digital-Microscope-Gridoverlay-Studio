@@ -161,3 +161,136 @@ Improve the static Grid Studio auto-fit algorithm (`grid-studio/js/autofit.js`, 
   image exports as an exact level rectangle.
 - Gotcha: reuse of a headless-Chrome `--user-data-dir` served cached old `.js` and produced a false failure; use a new one per run.
 - Not done: nothing committed or pushed; the SurveyApps vendored copy of Grid Studio was not re-synced.
+
+## Crop to array + chip list from a file (2026-11-14, lead: Claude Fable 5.2)
+
+User requests: (1) a preset that crops/exports exactly the array's outer edge (wells + half a wall, no dead room); (2) chip versions
+read from a file instead of being hard-coded.
+
+- (1) DONE by the lead in the main checkout, uncommitted: `S.chip.arrayOnly`, `arrayRect()` / `arrayCropRect()` / `updateArrayMask()` /
+  `setArrayOnly()` in `grid-studio/js/grid.js`; `export.js` cuts the PNG to the array; controls in `panels.js` (Crop panel) and
+  `index.html` + `main.js` ("array only" by Export); `state.js`; one new test in `tests.html`; notes in ARCHITECTURE.md / README.md.
+  Verified: tests.html 124 / 124 (headless Chrome, fresh profile); on the real V11 photo the export is 1732 × 1732 px = the array.
+- (2) DONE: implemented by Gemini 4 Argon (Antigravity) in an isolated worktree (branch `t3/import-editable-chip-lists`, commit
+  `3f539ad`, local only), merged by the lead into the main checkout as uncommitted changes: packaged editable
+  `grid-studio/chips.js` (`var BUILTIN_CHIPS`), `validateChips` / `parseChipFile` / `setChipList` and the remembered list
+  (`localStorage` key `gridStudio.chipList`) in `presets.js`, Load / Save / Use built-in buttons in the Chip version panel.
+- Independent review by Claude Opus 5.5 (Antigravity): geometry and export correct; 1 high + 4 medium + 7 low findings. Fixed by the
+  lead: a typo in chips.js is reported with its line number (was: empty list, no message); µ in CSV headers; decimal commas and
+  thousands separators; `well < pitch` and a well-count limit; the remembered list says when chips.js changed since; tests run the app
+  with `index.html?nostore` so they never read or delete a remembered list and no longer assume 12 chips; "Crop to array" switches off
+  when the chip or "Fit canvas to array" is unticked; the canvas border is never less than half a wall; the Crop panel text follows
+  Offset X/Y; loading a list keeps the image's µm per pixel. Left as is on purpose: the picture outside the array is hidden, not dimmed.
+- Verified after the fixes: tests.html 132 / 132 (headless Chrome, fresh profile, both real photos present); a chips.js with
+  `shape: square` (quotes missing) starts the app and shows "mistake at line 35". Not verified: clicking the real file picker /
+  download prompt in a visible browser; Firefox / Safari; Excel UTF-16 CSV files.
+- Per the user (2026-11-14): work locally only. Nothing from this section is committed or pushed; SurveyApps' vendored copy is not
+  updated for it.
+
+## Refactor (2026-11-14, lead: Claude Fable 5.2) — local only, uncommitted
+
+Behaviour-preserving reorganisation after the last three features; no logic changed.
+- `presets.js` split: it keeps the scale / tick / fit code; the chip LIST (validate, JSON/CSV import, remembered list, start-up) is
+  the new `js/chiplist.js`, loaded right after presets.js (it calls `initChipList()` at its end).
+- `autofit.js` split: it keeps the pure analysis; apply / undo / buttons / messages are the new `js/autofit-app.js`.
+- "Crop to array" UI (`updateArrayMask`, `arrayCropText`, `setArrayOnly`) moved from grid.js to crop.js; the geometry
+  (`arrayRect`, `arrayCropRect`) stays in grid.js. `escHtml` moved to state.js next to `clamp`.
+- File headers rewritten where stale (autofit.js described the old edge-only algorithm). ARCHITECTURE.md file map, README, AGENTS updated.
+- Not done: `afComputeOnce()` in autofit.js is still one ~350-line function with numbered stages; splitting it means threading a lot
+  of shared fit state and was left for a session that can re-validate it on the stress photos.
+- SurveyApps note: its `vendor/grid-studio` must be re-copied (two new script files + chips.js) when this is released.
+
+## SurveyApps local working-tree integration (2026-11-14)
+
+Synced 25 public Grid Studio files from the current working tree, excluding samples. Added `surveyapps/scripts/sync_grid_studio.py` (explicit public allowlist and byte verification). Provenance records e6ba1c4 plus uncommitted upstream files. New features include crop-to-array, chips.js, chiplist.js and autofit-app.js. No upstream source was edited.
+
+Extracted protocol resource serving unchanged to `surveyapps/desktop/protocol.cjs`; main retains session security, IPC and lifecycle. Added explicit packaging exclusion for samples and ignored dist-local. Updated SurveyApps architecture/upstream documentation. Extended desktop tests for script MIME types, custom-origin localStorage, chip-list file import/download and array PNG download, including filenames. Existing scientific backend code was not changed by this integration.
+
+Observed validation:
+- `node tests/original-grid.cjs --vendor`: PASS, 132 / 132 passed, errors []. Real-photo tests skipped without samples.
+- `.venv/bin/python -u -m unittest discover -s tests -p "test_*.py" -v`: 8 tests, OK.
+- `node tests/backend-lifecycle.cjs`: PASS missing executable error and idempotent cleanup.
+- `diff -rq grid-studio surveyapps/vendor/grid-studio`: only samples missing (expected exit 1).
+- electron-builder ARM64 with `--publish never -c.directories.output=dist-local`: completed, app/DMG/ZIP created. Version remains 1.0.1. Existing dist and backend builds retained.
+- ASAR listing: 47 entries, no samples path; unpacked app recursive scan: zero files in samples directories. `codesign --verify --deep --strict` succeeded.
+- First desktop run passed functional groups but failed orphan-process assertion because a second test run was concurrent. Second expanded packaged run passed all 8 groups and zero orphans. Final standalone run with explicit chips.json and array-V12.png filename assertions also passed all 8 groups (exit 0).
+
+Local outputs (relative to workspace): `surveyapps/dist-local/mac-arm64/SurveyApps!.app`, `surveyapps/dist-local/SurveyApps-1.0.1-mac-arm64.dmg`, and corresponding ZIP. No commits, pushes, releases or CI runs. Intel/Windows builds and physical native-dialog interaction were not verified. File-input automation and native download events exercise the integration.
+
+## Grid Studio liquid glass styling
+- CSS-only presentation update in `grid-studio/css/style.css`: prefixed glass tokens, floating rounded chrome, blue selection/focus, inset fields, responsive toolbar, reduced-transparency/motion fallbacks. No app logic changed.
+- Inspected sample + selected chip + crop at 800×600, help at 1440×900, and forced CPU crop at 1440×900. Screenshots in `/var/folders/nt/30k1z6td5cdd9g384c96wg8h0000gn/T/grid-glass-h4bigl0i/`.
+- Native range controls retain browser accent-filled tracks. No external assets. Automated self-test result recorded separately by final report; no console instrumentation performed.
+- Required fresh-profile headless self-tests completed: title PASS; 132 / 132 passed. Local verification server stopped.
+
+## Grid Studio instrument finish and press feedback
+- CSS-only follow-up: numbered section rails replace nested panel cards, chip presets form a compact specimen table, and an etched crosshair identifies the app. Added control-only depression/highlight feedback and slider thumb response; reduced-motion mode suppresses movement.
+- Native checkbox semantics remain intact; custom appearance is a solid white rounded box when checked and a transparent outlined box when unchecked. Forced-colors mode restores native appearance.
+- Inspected screenshots at 1440×900, 1200×800, and 800×600 with sample/chip/crop, plus settings. CDP mouse presses confirmed .97 scale + 1px depression, no movement under reduced motion, and checkbox toggling. Final interaction run reported zero runtime exceptions; CPU sample rendered.
+- Fresh-profile self-tests: first remained Self-tests; required rerun returned PASS, 132 / 132 passed. A transient script-load failure occurred during an intermediate browser check; final check on a higher-backlog local server completed without runtime exceptions. No app JS changes.
+- Evidence: `/var/folders/nt/30k1z6td5cdd9g384c96wg8h0000gn/T/grid-instrument-nu2zud9_/` (desktop.png, 1200.png, 800.png, settings.png, help.png, pressed.png, cpu.png, verification.json, tests-rerun.html).
+
+
+## Monochrome typography and slider refinement
+- Consolidated layered CSS overrides into a single stylesheet organized by tokens, layout, components, work surface, and accessibility. Grayscale chrome with white actions/selection; image and grid color choices remain available. Removed monospaced UI labels in favor of the system SF stack, refined weight/spacing, retained tabular measurements. Chrome confirmed native `.SF NS` font on this Mac.
+- `ui.js` now sets the live slider progress CSS variable on synchronization and keyboard changes, and gives range/number controls accessible names. Slider values/stepping/render algorithms are unchanged. Range pointer target is 28px tall; native dragging remains immediate.
+- Verified native mouse slider drag (8→21), arrow step (21→22), numeric input (12, track 30%), white/clear checkbox states, press feedback and reduced-motion override. Final interaction check recorded zero runtime exceptions and CPU sample rendering. Visually inspected desktop, settings and compact screenshots at 1440×900, 1200×800, and 800×600. Fresh-profile self-tests returned PASS, 132 / 132 passed.
+- Evidence: /var/folders/nt/30k1z6td5cdd9g384c96wg8h0000gn/T/grid-monochrome-svsz94qs (desktop.png, 1200.png, 800.png, settings.png, help.png, pressed.png, cpu.png, verification.json, tests.html). Changes remain local and uncommitted.
+
+## SurveyApps shell and Fluorescence Lab Liquid Glass restyle (2026-11-15)
+- Restyled the SurveyApps Electron shell (`surveyapps/renderer/index.html`, `surveyapps/renderer/styles.css`) and Fluorescence Lab (`surveyapps/backend/assets/desktop.css`, presentational style dicts/classes in `surveyapps/backend/microscopy_app.py`) to the shared Apple Liquid Glass design system (`--lg-*` tokens, `backdrop-filter: blur(24px) saturate(170%)`, 1px hairline border, top inner highlight, soft shadow, ambient colour-field background on the dashboard, floating pill navigation bar, quiet glass capsule buttons, filled `#0A84FF` primary actions, inset translucent inputs, tabular numerals, and `@supports not (backdrop-filter: blur(1px))` + `prefers-reduced-transparency` / `prefers-reduced-motion` fallbacks).
+- Overrode Dash 4.5.0 CSS custom properties (`--Dash-*`) and component classes (`.dash-dropdown`, `.dash-slider-*`, `.dash-checklist`, `.js-plotly-plot .modebar`) in `surveyapps/backend/assets/desktop.css`. Scientific logic, callbacks, component IDs, `surveyapps/vendor/**`, `grid-studio/**`, `desktop/**`, `scripts/**`, and `surveyapps/dist/**` were not modified.
+- Re-froze the local Python backend (`surveyapps/build/backend`) via `.venv/bin/python scripts/build_backend.py` so unpackaged Electron launches serve the updated Fluorescence Lab assets.
+- Verified:
+  - `.venv/bin/python -u -m unittest discover -s tests -p "test_*.py" -v`: **8 / 8 PASS**.
+  - `node tests/desktop.cjs` (unpackaged dev mode): **8 / 8 check groups PASS** (`surveyapps/test-results/desktop-dev.json`), zero orphan processes.
+  - Visually inspected `surveyapps/test-results/home-wide-dev.png` (1440×960), `home-800px-dev.png` (800×600), `help-dev.png`, `grid-studio-dev.png`, and `fluorescence-lab-dev.png`.
+
+
+
+## Desktop shell navigation overlap fix
+- User screenshot showed shell navigation intruding into Session Active. Replaced header flex shrinking with explicit grid tracks in renderer/styles.css; <=1360px navigation gets a dedicated row, <=600px status gets its own row. Header height follows content and the iframe remains below it.
+- Embedded vendor Grid Studio had stale CSS/ui.js. Copied the two current presentation files from root Grid Studio; no other vendor files or app logic changed.
+- Verified browser shell with a mocked desktop bridge at 1440, 1361, 1360, 1200, 1101, 961, 960, 800, and 600px: navigation/status rectangles do not overlap, nav labels remain within viewport, and iframe starts below header. Final runtime exception count zero. Inspected 1440/1200/800 screenshots and loaded sample in embedded app. Vendor self-tests: PASS, 132 / 132 passed.
+- Evidence: /var/folders/nt/30k1z6td5cdd9g384c96wg8h0000gn/T/grid-shell-overlap-2ydf7bmn (width-named screenshots, verification.json, tests.html). Verification used source renderer; installed/packaged Electron app was not rebuilt.
+
+## Integration continuation (2026-11-15, incomplete validation)
+- Updated shell and Lab CSS accents to neutral white, with dark text on primary actions; preserved responsive navigation tracks and scientific plot colors. No algorithm changes.
+- Python science tests: 8/8 OK (`/tmp/survey-python.log`). Backend refreeze completed (`/tmp/survey-freeze.log`).
+- ARM64 local packaging started with publish never into dist-local (`/tmp/survey-build.log`); completion and packaged validation remain required.
+- Standalone source/vendor Playwright selftests remained waiting with no result; root cause unresolved. Do not claim PASS or attribute this to backlog. Dev E2E reached dashboard + Grid interactions; final result pending (`/tmp/survey-dev.log`).
+- Outstanding: startup diagnostics, final sequential selftests/E2E, visual inspection, ASAR/source comparison, signature/sample checks. This continuation does not establish release readiness.
+
+Follow-up results: source and vendor standalone selftests both completed PASS 132/132, errors []; earlier 'stalled' observation was premature, not a demonstrated startup failure. ARM64 DMG/ZIP build completed; codesign --verify --deep --strict succeeded; unpacked app scan found zero sample-directory files. Dev E2E still pending at Grid custom-protocol selftests. Packaged E2E, ASAR byte comparison and final visual QA remain outstanding. The initial relative-path CSS edit failed, then was corrected successfully; neutral accent and dark action-label declarations verified in both stylesheets.
+
+Further verification: dev E2E completed 8/8 PASS, zero orphans. ASAR byte comparison matched 32 desktop/renderer/vendor files and no samples entries. Packaged E2E launched sequentially after dev exited, log /tmp/survey-packaged.log. Inspected home-wide-dev.png: navigation and readiness capsules separated, primary action contrast correct; decorative blue artwork/badge/icon remain (further monochrome polish may be wanted). Packaged test result remains pending.
+
+
+## Final local monochrome integration verification (2026-11-15)
+- Source and vendor Chromium self-tests completed: 132/132 PASS, no page errors. The preceding report of stalled runs was premature: those same processes finished successfully. Earlier virtual-time/dump-DOM incomplete runs were not reproduced or conclusively diagnosed; no claim of a startup bug fix.
+- Python science 8/8 PASS; backend refrozen. Dev E2E 8/8 PASS and rebuilt ARM64 packaged E2E 8/8 PASS, zero unexpected page/console/HTTP500 errors, zero orphan backend processes. Packaged evidence: test-results/desktop-glass-final.json; screenshots use glass-final suffix.
+- Independently inspected desktop/compact dashboard, embedded Grid Studio and Fluorescence Lab screenshots. White primary actions and neutral controls are readable; navigation/status are separate. Scientific colors, status indicators and decorative artwork retain color.
+- 32 packaged renderer/desktop/Grid Studio files byte-match source; packaged Lab CSS byte-matches source. No samples in ASAR or ZIP. Strict recursive ad-hoc signature verification, DMG checksum verification and full ZIP CRC test passed.
+- Current artifacts: surveyapps/dist-local/mac-arm64/SurveyApps!.app, surveyapps/dist-local/SurveyApps-1.0.1-mac-arm64.dmg and .zip. Version retained at 1.0.1; local build only, no commit/push/publication/CI. Intel/Windows not rebuilt for this UI update; no Developer ID signing/notarization. This final record supersedes the preceding incomplete-validation checkpoint.
+
+## Empty workspaces and dimmed upload prompt (2026-11-15)
+- Removed automatic Lab purple/green demo (`surveyapps/backend/microscopy_app.py`, `surveyapps/tests/test_empty.py`). Before upload the plot is neutral (`#181818`) with an `"Upload image to begin"` prompt; compute/crop/rotate/export cannot fabricate sample measurements. Uploaded-image workflows and `_uploaded_image` monkeypatching remain unchanged. Optional Grid Studio sample (`grid-studio/js/images.js`, synced to `surveyapps/vendor/grid-studio/`) is now grayscale.
+- Grid Studio `#hint` (`grid-studio/css/style.css`, synced to `surveyapps/vendor/grid-studio/`) now sits above an 88% dark canvas overlay (`rgba(18,18,18,.88)`, `z-index: 10`, `pointer-events: none`). It does not intercept pointer/drop events; failed image decoding keeps it visible and successful `setImage()` removes both text and dimming. Toolbar/settings remain usable.
+- Source and vendor self-tests: **132 / 132 PASS** (`test-results/original-grid.json`, `test-results/vendor-grid.json`); Python unit suite: **9 / 9 PASS** (includes `tests/test_empty.py`). Sequential dev E2E (`test-results/desktop-dev.json`) **8 / 8 PASS** and final rebuilt ARM64 packaged E2E (`test-results/desktop-empty-final.json`) **8 / 8 PASS**, zero unexpected page/console/HTTP500 errors and zero orphans. Inspected `grid-empty-empty-final.png`, `grid-studio-empty-final.png`, `lab-empty-empty-final.png`, and `fluorescence-lab-empty-final.png`.
+- Corrected E2E startup predicate in `surveyapps/tests/desktop.cjs` that still required the removed synthetic-image axis range; now explicitly requires empty plot/no image plus upload prompt. Subsequent real uploads and six export types passed.
+- 32 packaged host/renderer/Grid files match source, no ASAR sample entries, strict ad-hoc signature verification (`codesign --verify --deep --strict`), `hdiutil verify`, and `unzip -tq` passed. Updated app/DMG/ZIP in `dist-local`, version `1.0.1` retained. No commits/pushes/publication. Intel/Windows not rebuilt.
+
+## Click-to-upload empty workspaces, refactor, and performance optimization (2026-11-15)
+- **Click-to-upload in both empty upload workspaces:**
+  - **Grid Studio (`grid-studio/css/style.css`, `grid-studio/js/main.js`, synced to `surveyapps/vendor/grid-studio/`):** Enabled `pointer-events: auto` and `cursor: pointer` on `#hint` when empty, and wired `dom.emptyHint.onclick` to open `#file` (`dom.file.click()`) when `e.button === 0 && !panMode && !S.img.el`. Once an image is loaded (`S.img.el` set), `#hint` is hidden (`display: none`) and clicking the stage does not trigger the file picker.
+  - **Fluorescence Lab (`surveyapps/backend/microscopy_app.py`, `surveyapps/backend/assets/desktop.css`):** Wrapped `#image-graph` in `#image-graph-wrap` (`className='survey-image is-empty'` when `!imgData`, `'survey-image'` when loaded) with `cursor: pointer` styling on `.survey-image.is-empty`. Added capture-phase click handling in the global clientside listener to trigger `document.querySelector('#upload-image input[type="file"]').click()` when `#image-graph` is clicked while no image is loaded (`!hasImage`).
+- **Performance optimizations & refactoring:**
+  - **Electron Shell (`surveyapps/renderer/styles.css`):** Replaced continuous full-window `filter: blur(88px)` + infinite `ambientDrift` keyframe animations on `.ambient-blob` with pre-softened static radial gradients, and set `display: none` on `.ambient-canvas` when `data-view="grid"` or `data-view="microscopy"` so zero GPU compositing occurs behind tool iframes.
+  - **Grid Studio (`grid-studio/js/state.js`, `main.js`, `ui.js`, `view.js`, `presets.js`, `gl.js`, `warp.js`, `panels.js`):** Coalesced `syncAll()` into `frame()` via `dirtyFlags.sync` / `flushSyncAll()`; cached slider range/number/progress values in `slider()` to skip redundant DOM/CSS writes; avoided reallocating `<canvas id="grid">` backing store in `layout()` when dimensions are unchanged; cached status bar and scale bar DOM values on `pointermove`; cached `el._lastHtml` in `updateChipInfo()`; cached WebGL `warpTexUniform` and reused `warpMeshBuf` (`Float32Array`); cached `.chip` row DOM references in `renderChipList()` / `buildChipPanel()`.
+  - **Fluorescence Lab (`surveyapps/backend/microscopy_app.py`):** Converted `update_well_options` and `invalidate_fluorescence` Dash callbacks to clientside callbacks (retaining Python functions for unit tests) to eliminate HTTP POST round-trips during slider dragging; combined all vertical and horizontal Plotly grid lines into a single SVG `type: 'path'` shape; cached PIL fonts in `_get_mono_font(font_size)`.
+- **Verified results:**
+  - `node surveyapps/tests/original-grid.cjs`: **134 / 134 PASS** (includes 2 new `#hint` click-to-upload tests and both real V11/V12 photos).
+  - `node surveyapps/tests/original-grid.cjs --vendor`: **134 / 134 PASS**.
+  - `surveyapps/.venv/bin/python -u -m unittest discover -s surveyapps/tests -p "test_*.py" -v`: **9 / 9 PASS**.
+  - Re-froze backend (`surveyapps/scripts/build_backend.py`) and ran `node surveyapps/tests/desktop.cjs` (dev): **8 / 8 PASS** (`surveyapps/test-results/desktop-dev.json`).
+  - Rebuilt ARM64 macOS package and ran `node surveyapps/tests/desktop.cjs --packaged`: **8 / 8 PASS** (`surveyapps/test-results/desktop-click-upload-final.json`), `codesign --verify --deep --strict`, `hdiutil verify`, `unzip -tq`, and zero private sample files verified. No commits or pushes.

@@ -9,7 +9,7 @@
  *  - S.img / S.lens / S.warp / S.grid / S.chip are mutated IN PLACE, never replaced
  *    (use Object.assign). Other modules keep references to them; replacing one silently breaks
  *    the settings panels (this was a real bug once).
- *  - Units: `S.doc` and S.img.x/y are CANVAS PIXELS. Chip data (presets.js) is in µm.
+ *  - Units: `S.doc` and S.img.x/y are CANVAS PIXELS. Chip data (chips.js / chiplist.js) is in µm.
  *    pxPerUm() converts µm → canvas px. Warp points are canvas-NORMALISED (0..1).
  *  - Registries (TOOLS, dragTypes) let each feature plug itself in without editing tools.js.
  */
@@ -18,6 +18,8 @@ const MAX_DOC = 8192;                       // largest canvas / texture edge, in
 
 const $ = sel => document.querySelector(sel);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+/** Text that came from a file (chip names …) made safe to put into innerHTML. */
+const escHtml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /* ---- default values (factories, so "reset" can re-apply them) ---- */
 const defaultLens = () => ({k1: 0, k2: 0, cx: .5, cy: .5, bypass: false});
@@ -43,7 +45,8 @@ const S = {
     offX: 0, offY: 0, cols: 0, rows: 0,     // offsets shift the grid; cols/rows 0 = as many as fit
     radius: 0, stroke: 2,                   // stroke = outline thickness in px for a 1200 px wide canvas (scaled up on bigger canvases)
   },
-  chip: {id: null, fit: true, margin: 8, savedDoc: null},   // ticked chip version; null id = manual grid
+  chip: {id: null, fit: true, margin: 8, savedDoc: null,    // ticked chip version; null id = manual grid
+         arrayOnly: false},                 // "Crop to array": show + export only what lies inside the array's outer edge (see arrayRect() in grid.js)
   zoom: 1,                                  // VIEW zoom (screen px per canvas px). Does not change the document.
   tool: 'move', crop: null, ratio: 0, cursor: null,
 };
@@ -60,7 +63,7 @@ const dragTypes = {};   // name → {start(e, p) → drag state, move(drag, e, p
 
 /* ---- redraw scheduler: mark what is stale, flush once per animation frame (main.js → frame()) ----
  * flags: gl (image layer), grid (overlay), layout (stage size/zoom), crop (crop box), warp (distort handles), status (status bar + chip info) */
-const dirtyFlags = {gl: true, grid: true, layout: true, crop: true, status: true, warp: true};
+const dirtyFlags = {gl: true, grid: true, layout: true, crop: true, status: true, warp: true, sync: false};
 let rafId = 0;
 function dirty(...keys) {
   keys.forEach(k => dirtyFlags[k] = true);
@@ -69,9 +72,10 @@ function dirty(...keys) {
 
 /* ---- settings-panel sync: every control registers a function that re-reads S into its widgets ---- */
 const syncs = [];
-const syncAll = () => syncs.forEach(fn => fn());
+const flushSyncAll = () => { dirtyFlags.sync = false; for (let i = 0; i < syncs.length; i++) syncs[i](); };
+const syncAll = () => flushSyncAll();
 /** The normal "I changed S" call: update the panel widgets, then redraw the given layers. */
-function refresh(...keys) { syncAll(); dirty(...keys); }
+function refresh(...keys) { flushSyncAll(); dirty(...keys); }
 
 function toast(text) {
   dom.toast.textContent = text; dom.toast.style.display = 'block';

@@ -28,19 +28,34 @@ function slider(parent, label, get, set, min, max, step) {
   const row = document.createElement('div'); row.className = 'row';
   row.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><input type="number" step="${keyStep}">`;
   const range = row.children[1], num = row.children[2];
+  let lastProgress = '', lastRangeVal = null, lastNumVal = null;
+
+  // Keep visual progress tied to the native range value (including clamped values).
+  const showProgress = () => {
+    const pct = `${((+range.value - min) / (max - min) * 100).toFixed(2)}%`;
+    if (pct !== lastProgress) { lastProgress = pct; range.style.setProperty('--lg-progress', pct); }
+  };
+  range.setAttribute('aria-label', label);
+  num.setAttribute('aria-label', `${label} value`);
 
   const show = () => {                                  // don't overwrite the control the user is typing in
     const v = get();
-    if (document.activeElement !== range) range.value = v;
-    if (document.activeElement !== num) num.value = (+v).toFixed(decimals);
+    if (document.activeElement !== range && v !== lastRangeVal) { lastRangeVal = v; range.value = v; }
+    const nv = (+v).toFixed(decimals);
+    if (document.activeElement !== num && nv !== lastNumVal) { lastNumVal = nv; num.value = nv; }
+    showProgress();
   };
   const commit = v => { set(v); syncAll(); };
-  range.oninput = () => commit(+range.value);
+  range.oninput = () => { showProgress(); commit(+range.value); };
   num.oninput = () => { if (num.value !== '' && !isNaN(+num.value)) commit(+num.value); };
 
   const bump = (dir, e) => {                            // arrow key on a focused control
     const k = Math.max(step, keyStep * (e.shiftKey ? 10 : 1) * (e.altKey ? .1 : 1));
-    commit(+(get() + dir * k).toFixed(4)); range.value = get(); num.value = (+get()).toFixed(decimals);
+    commit(+(get() + dir * k).toFixed(4));
+    const v = get(), nv = (+v).toFixed(decimals);
+    lastRangeVal = v; range.value = v;
+    lastNumVal = nv; num.value = nv;
+    showProgress();
   };
   const onArrow = allowed => e => {
     const dir = ARROW_DIR[e.key];

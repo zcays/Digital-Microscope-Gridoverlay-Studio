@@ -54,7 +54,7 @@ void main(){ gl_FragColor = texture2D(u_tex, v); }`;
 const MESH_N = 32;                                        // warp mesh is MESH_N × MESH_N quads
 
 let gl, program, warpProgram, texture, quadBuf, meshBuf, meshIndexBuf, meshIndexCount;
-let fbo, fbTexture, fbSize = {w: 0, h: 0};
+let fbo, fbTexture, fbSize = {w: 0, h: 0}, warpTexUniform = null;
 const uniform = {};
 
 function compileShader(type, src) {
@@ -89,6 +89,7 @@ function setupGL() {
   program = linkProgram(VERTEX_SRC, FRAGMENT_SRC, ['a']);
   warpProgram = linkProgram(WARP_VERTEX_SRC, WARP_FRAGMENT_SRC, ['a_pos', 'a_uv']);
   UNIFORMS.forEach(n => uniform[n] = gl.getUniformLocation(program, n));
+  warpTexUniform = gl.getUniformLocation(warpProgram, 'u_tex');
 
   quadBuf = gl.createBuffer();                                          // full-screen quad, y down
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
@@ -153,7 +154,7 @@ function drawWarpPass() {
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
   gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fbTexture);
-  gl.uniform1i(gl.getUniformLocation(warpProgram, 'u_tex'), 0);
+  gl.uniform1i(warpTexUniform, 0);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, meshIndexBuf);
   gl.drawElements(gl.TRIANGLES, meshIndexCount, gl.UNSIGNED_SHORT, 0);
   gl.disableVertexAttribArray(1);

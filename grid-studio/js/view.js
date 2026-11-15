@@ -6,12 +6,18 @@
 const ZOOM_MIN = .05, ZOOM_MAX = 8;
 
 function layout() {
-  const {w, h} = S.doc, z = S.zoom;
-  dom.stage.style.width = w * z + 'px'; dom.stage.style.height = h * z + 'px';
-  for (const c of [dom.gl, dom.grid]) { c.style.width = w * z + 'px'; c.style.height = h * z + 'px'; }
+  const {w, h} = S.doc, z = S.zoom, cssW = w * z + 'px', cssH = h * z + 'px';
+  if (dom.stage.style.width !== cssW) dom.stage.style.width = cssW;
+  if (dom.stage.style.height !== cssH) dom.stage.style.height = cssH;
+  for (const c of [dom.gl, dom.grid]) {
+    if (c.style.width !== cssW) c.style.width = cssW;
+    if (c.style.height !== cssH) c.style.height = cssH;
+  }
   // The grid canvas is rendered at screen resolution so lines stay crisp when zoomed in.
   const k = Math.max(.05, Math.min(z * (window.devicePixelRatio || 1), MAX_DOC / Math.max(w, h)));
-  dom.grid.width = Math.max(1, Math.round(w * k)); dom.grid.height = Math.max(1, Math.round(h * k));
+  const gw = Math.max(1, Math.round(w * k)), gh = Math.max(1, Math.round(h * k));
+  if (dom.grid.width !== gw) dom.grid.width = gw;
+  if (dom.grid.height !== gh) dom.grid.height = gh;
   dirtyFlags.grid = dirtyFlags.crop = dirtyFlags.warp = true;
 }
 
@@ -34,20 +40,24 @@ function docPoint(e) {
 }
 
 /* ---------------- status bar + µm ruler ---------------- */
+const setTextIfChanged = (el, text) => { if (el && el.textContent !== text) el.textContent = text; };
+
 function updateStatusBar() {
   const k = pxPerUm(), c = S.cursor;
-  $('#sInfo').textContent = `${S.doc.w} × ${S.doc.h} px · ${rendererName()}`;
-  $('#sZoom').textContent = Math.round(S.zoom * 100) + '%';
-  $('#sPos').textContent = !c ? '' : k ? `x ${Math.round(c.x / k)} µm  y ${Math.round(c.y / k)} µm` : `x ${Math.round(c.x)}  y ${Math.round(c.y)}`;
+  setTextIfChanged($('#sInfo'), `${S.doc.w} × ${S.doc.h} px · ${rendererName()}`);
+  setTextIfChanged($('#sZoom'), Math.round(S.zoom * 100) + '%');
+  setTextIfChanged($('#sPos'), !c ? '' : k ? `x ${Math.round(c.x / k)} µm  y ${Math.round(c.y / k)} µm` : `x ${Math.round(c.x)}  y ${Math.round(c.y)}`);
   updateScaleBar(k);
   updateChipInfo();
 }
 
 /** Ruler in real µm (only while a chip version is ticked): lets you check well size and spacing against the table. */
 function updateScaleBar(k) {
-  const bar = $('#scalebar');
-  bar.style.display = k ? 'block' : 'none'; if (!k) return;
+  const bar = $('#scalebar'), disp = k ? 'block' : 'none';
+  if (bar.style.display !== disp) bar.style.display = disp;
+  if (!k) return;
   const um = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].find(u => u * k * S.zoom >= 70) || 10000;
-  bar.firstElementChild.style.width = um * k * S.zoom + 'px';
-  bar.lastElementChild.textContent = um >= 1000 ? um / 1000 + ' mm' : um + ' µm';
+  const wPx = um * k * S.zoom + 'px', label = um >= 1000 ? um / 1000 + ' mm' : um + ' µm';
+  if (bar.firstElementChild.style.width !== wPx) bar.firstElementChild.style.width = wPx;
+  setTextIfChanged(bar.lastElementChild, label);
 }

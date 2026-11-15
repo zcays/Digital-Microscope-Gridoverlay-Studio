@@ -6,6 +6,9 @@
  * The stored crop is an ORIENTED rectangle in image px: {x, y, w, h, rot}, where rot (degrees) turns the rectangle about its own centre.
  * A selection drawn on a rotated image therefore keeps the straight, level edges you drew (rot = −image rotation), instead of
  * turning into a slanted box. Old-style crops without `rot` mean rot = 0. cropFrame() gives renderers its centre / half size / cos / sin.
+ * "CROP TO ARRAY" (S.chip.arrayOnly) is a second, separate thing: a preset tied to the GRID, not a hand-drawn crop of the image. While on,
+ * updateArrayMask() hides the picture outside the array's outer edge (arrayCropRect() in grid.js) and export.js cuts the PNG to it.
+ * It never touches S.img.crop. See the section at the end of the non-tool code below.
  * Registers TOOLS.crop and the cropNew / cropMove / cropResize drag types at the bottom of this file. */
 
 const rectHasArea = r => r && r.w >= 1 && r.h >= 1;
@@ -121,6 +124,26 @@ function updateCrop() {
   $('#cropInfo').textContent = c ? `Selection ${Math.round(c.w)} × ${Math.round(c.h)} px at (${Math.round(c.x)}, ${Math.round(c.y)})` : 'No selection';
   $('#cropApply').disabled = !rectHasArea(c);
 }
+
+/* ---------------- "Crop to array": show + export only the chip array's outer edge ---------------- */
+/** "Crop to array" on screen: hide the picture outside the array's outer edge. Done with a CSS clip on the image canvas, so it is the same
+ *  for the GPU and the software renderer and never touches the image settings. Called every frame (main.js). */
+function updateArrayMask() {
+  const r = arrayCropRect(), pct = v => (100 * v).toFixed(4) + '%';
+  const clip = r ? `inset(${pct(r.y / S.doc.h)} ${pct(1 - (r.x + r.w) / S.doc.w)} ${pct(1 - (r.y + r.h) / S.doc.h)} ${pct(r.x / S.doc.w)})` : '';
+  if (dom.gl.style.clipPath !== clip) dom.gl.style.clipPath = clip;
+  const info = $('#arrayCropInfo'), text = arrayCropText(); if (info && info.textContent !== text) info.textContent = text;   // here, not in a panel sync: Offset X/Y only redraw the grid
+}
+/** What the Crop panel says about "Crop to array" right now. */
+function arrayCropText() {
+  const full = arrayRect(); if (!full) return 'Crop to array needs a ticked chip version with “Fit canvas to array”.';
+  if (!S.chip.arrayOnly) return 'Trims the picture to the array’s outer edge (all wells plus half a wall around them) and makes Export PNG save exactly that. Line the photo up first, then tick this; untick it to see the dead room again.';
+  const r = arrayCropRect(); if (!r) return 'On, but the array lies outside the canvas (check Offset X / Y in the Grid panel), so Export PNG saves the whole canvas.';
+  const cut = r.w < Math.round(full.w) - 1 || r.h < Math.round(full.h) - 1;
+  return `On: the picture is trimmed to the array’s outer edge (all wells plus half a wall around them) and Export PNG saves exactly that, ${r.w} × ${r.h} px.` +
+    (cut ? ' Part of the array lies outside the canvas (check Offset X / Y in the Grid panel), so that part is missing.' : ' The dead room around the array is left out.');
+}
+function setArrayOnly(on) { S.chip.arrayOnly = !!on; refresh('gl', 'crop', 'status'); }
 
 /* ---------------- tool + mouse drags (registered into the registries in state.js) ---------------- */
 const insideRect = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;

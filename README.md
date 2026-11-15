@@ -45,7 +45,7 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 
 ## Features
 
-- **Chip versions:** tick one of V1-Square, V3.1, V3.2, V7.0, V9.0–V9.2, V10.2, V11, V12, V15.1, V15.2 and the grid takes that chip's well shape (square or circle), well size and pitch from the geometry table, true to scale, filling the whole canvas. Adjust the image (move / scale / rotate) until it lines up; the app shows the image's µm per pixel. By default the canvas is resized to fit the chip's real N × M well array plus an adjustable dead-room border ("Fit canvas to array" / "Dead room %"); untick it to tile the grid across a fixed canvas instead.
+- **Chip versions:** tick one of the built-in versions (V1-Square, V3.1, V3.2, V7.0, V9.0–V9.2, V10.2, V11, V12, V15.1, V15.2) — or edit `grid-studio/chips.js` / load your own JSON or CSV table — and the grid takes that chip's well shape (square or circle), well size and pitch from the geometry table, true to scale, filling the whole canvas. Adjust the image (move / scale / rotate) until it lines up; the app shows the image's µm per pixel. By default the canvas is resized to fit the chip's real N × M well array plus an adjustable dead-room border ("Fit canvas to array" / "Dead room %"); untick it to tile the grid across a fixed canvas instead.
 - **Auto-fit (computer vision):** tick the chip version, press **Auto-fit image to grid** (or `A`) and the app finds the wells in the
   photo and sets tilt, size, position, fisheye strength and the distortion handles so the photo lines up with the grid. It reports the
   typical error, refuses (and changes nothing) when it cannot do it reliably, and has **Undo auto-fit**. See "Auto-fit" below.
@@ -57,8 +57,25 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 - Move, scale and rotate the image; arrow-key nudging
 - Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back); a crop drawn on a rotated image keeps the straight edges you drew
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
+- **Crop to array**: one tick (Crop panel, or "array only" next to Export) trims the picture to the array's outer edge — all wells plus half a wall around them — and Export PNG then saves exactly that and nothing more (`array-<chip>.png`). Line the photo up first (the dead room around the array helps with that), then tick it; untick it to see the dead room again
 - PNG export of image + grid (both, or either one) at the full canvas resolution, including fisheye correction, distortion and crop
 - Grid line ("wall") thickness is adjustable (Line width) and scales with the canvas size so it stays clearly visible
+
+## Chip versions file
+
+You can add or update chip versions in two ways:
+
+1. **Edit the packaged file (`grid-studio/chips.js`):** open `grid-studio/chips.js` in any plain-text editor, copy an existing line, change the name and numbers (all lengths are in µm, and `pitch = well + wall`), save, and reload the browser page.
+2. **Load a JSON or CSV file in the app:** in the **Chip version** panel, click **Load chip list…** and pick a `.json` or `.csv` file (remembered between sessions in your browser). Click **Save chip list…** to download the current list as `chips.json` for a ready-made template, or **Use built-in list** to switch back to `chips.js`.
+
+A loaded list is remembered and takes priority over `chips.js`. If you later edit `chips.js`, the panel tells you it has changed; click **Use built-in list** to switch to it. If `chips.js` has a mistake (for example a missing quote), the panel shows the line number instead of the chip list.
+
+A CSV exported from the lab's spreadsheet works directly. Example header row and one chip row:
+
+```csv
+Chip Version,Shape,Bottom,Draft Angle,Nominal Pitch,Well size,Top Wall Width,Depth,Array width (um),Array length (um),# wells wide,# wells long
+V16,square,draft angle 5%,5,150,110,40,200,9000,9000,60,60
+```
 
 ## Auto-fit
 
@@ -117,7 +134,7 @@ Self-tests: open `grid-studio/tests.html` (should say PASS).
 
 ## Project layout
 
-`grid-studio/index.html` is the page, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
-`state` (state + scheduler), `presets` (chip table + scale), `actions`, `warp` (distort), `gl` (GPU image layer), `cpu` (software image layer), `render` (picks one), `images`, `grid`,
-`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit), `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
-loaded in order, which is why the app also works from disk. Chip data lives in `grid-studio/js/presets.js`.
+`grid-studio/index.html` is the page, `grid-studio/chips.js` is the editable built-in chip table, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
+`state` (state + scheduler), `presets` (chip scale), `chiplist` (chip list: validation, import), `actions`, `warp` (distort), `gl` (GPU image layer), `cpu` (software image layer), `render` (picks one), `images`, `grid`,
+`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit analysis) + `autofit-app` (its buttons), `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
+loaded in order, which is why the app also works from disk. Built-in chip data lives in `grid-studio/chips.js`.

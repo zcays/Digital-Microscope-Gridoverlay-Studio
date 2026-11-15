@@ -28,7 +28,8 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | File | Responsibility | Touch it when you want to… |
 |---|---|---|
 | `state.js` | `S` (all state), default factories, DOM handles (`dom`), `TOOLS` / `dragTypes` registries, `dirty()` / `refresh()` scheduler, `toast()` | add a state field, a redraw layer |
-| `presets.js` | The chip table (`CHIPS`), µm→px scale (`pxPerUm`), image calibration (`umPerPx`), chip select / zoom / fit logic, the chip info box | add or fix a chip version; change scaling rules |
+| `presets.js` | µm→px scale of the ticked chip (`pxPerUm`), image calibration (`umPerPx`), tick / fit / dead room (`selectChip`, `setChipFit`, `setChipMargin`), chip info box | change how a chip sizes the canvas |
+| `chiplist.js` | The live chip list `CHIPS`: validation (`validateChips`), JSON/CSV import (`parseChipFile`), `setChipList`, the remembered list, start-up from `chips.js` | change what a chip file may contain |
 | `actions.js` | Small named commands (reset, centre, fit, toggle grid, nudge) | add a one-line command reused by buttons + keys |
 | `warp.js` | Distort tool: control-point maths, mesh generation, on-canvas handles, its drag types | change how distortion works |
 | `gl.js` | WebGL (GPU): shaders, two-pass render (`renderGL`), texture upload | add an image effect, change the lens model |
@@ -37,9 +38,10 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `images.js` | Load file / paste / drop, built-in fisheye sample, `setImage()` (reset-everything entry point) | change what happens on image load |
 | `grid.js` | `gridLayout()` (where cells go) and `drawGrid()` (draws them; also used for export) | change grid geometry or look |
 | `view.js` | Stage size, view zoom, pointer→canvas coords, status bar, µm scale bar | change zoom or status readouts |
-| `crop.js` | Crop tool: selection maths, canvas→image rect conversion, apply / undo / reset, crop box, its drag types | change cropping |
+| `crop.js` | Crop tool: selection maths, canvas→image rect conversion, apply / undo / reset, crop box, its drag types; "Crop to array" (`updateArrayMask`, `setArrayOnly`) | change cropping |
 | `cv.js` | Vision toolbox with no app state: blur, gradients, FFT, lattice peak finder, phase demodulation, phase unwrapping, robust least squares | reuse or improve a vision step |
-| `autofit.js` | Auto-fit: finds the well lattice in the photo and fits the image model to the chip grid; Auto-fit / Undo buttons | change how auto-fit decides |
+| `autofit.js` | Auto-fit ANALYSIS (pure): finds the well lattice in the photo and fits the image model to the chip grid (`afCompute`, `afForward`, thresholds `AF`) | change how auto-fit decides |
+| `autofit-app.js` | Auto-fit in the app: run on the loaded image, apply to `S`, one-step undo, result messages (`autoFit`, `autoFitNow`, `undoAutoFit`, `afMessage`) | change what the buttons do or say |
 | `ui.js` | Widget helpers: `slider`, `checkbox`, `buttons`, `line`, `note`, `setter`, `KEY_STEP` | add a new kind of control |
 | `panels.js` | Builds the right-hand panels from the widgets | add a slider / setting |
 | `tools.js` | Active tool, `setTool`, mouse/touch dispatch, pan + image-move drags | add a tool |
@@ -47,14 +49,14 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `export.js` | `buildExportCanvas()` (image then grid, full resolution) and PNG download | change export |
 | `main.js` | `frame()` loop, top-bar wiring, `init()` | start-up order |
 
-Other files: `index.html` (markup, panel containers, help overlay, script order), `css/style.css`,
+Other files: `chips.js` (packaged user-editable chip table `BUILTIN_CHIPS`, next to `index.html`), `index.html` (markup, panel containers, help overlay, script order), `css/style.css`,
 `tests.html` (self-test page), `../README.md` (user-facing), `../AGENTS.md` (short rules for AI agents).
 
 ## Concepts you must know
 
 **Coordinate spaces.** Three, and mixing them is the classic bug:
 1. *Canvas px* — `S.doc` (canvas size), `S.img.x/y`, grid layout, pointer positions passed to drag handlers.
-2. *µm* — all chip data in `presets.js`. Convert with `pxPerUm()` (canvas px per µm).
+2. *µm* — all chip data (`chips.js`, `chiplist.js`). Convert with `pxPerUm()` (canvas px per µm).
 3. *Canvas-normalised 0..1* — warp control points (`S.warp`).
 View zoom (`S.zoom`) is separate: screen px per canvas px. It never affects the document or the export.
 
@@ -92,6 +94,15 @@ bounding box in the unrotated image, which showed up as a slanted box). Both ren
 and mask in the corrected-image space, so the crop never changes `S.doc`, the grid or the chip scale, and it moves/scales/rotates with
 the image afterwards. With distortion handles or a fine mesh the drawn box is not exactly a rectangle in the image: the closest
 rectangle is used (edges can be off by the size of the distortion, typically a few px). Non-destructive: Reset crop / Undo restore it.
+
+**Crop to array** (`S.chip.arrayOnly`; checkbox in the Crop panel and "array only" next to Export) is a preset, not a hand-drawn crop. It is
+tied to the GRID, not to the image: `arrayRect()` (grid.js) is the array's outer edge on the canvas — every well plus half a wall all
+round, i.e. `wide × long` whole pitches — and `arrayCropRect()` is that rectangle in whole canvas pixels. While it is on,
+`updateArrayMask()` (crop.js) hides the picture outside it with a CSS `clip-path` on the image canvas (same for both renderers, no image setting
+changes) and `buildExportCanvas()` cuts the PNG to exactly that rectangle (file name `array-<chip>.png`). It needs a ticked chip with
+"Fit canvas to array" (otherwise the array has no definite place and the controls are disabled). The edges are rounded to whole pixels, so
+they are within half a canvas pixel of the true outer edge (the canvas border is never less than half a wall, so the edge is always on the
+canvas unless Offset X/Y pushes it off; the panel text says so when that happens). Unticking the chip or "Fit canvas to array" switches it off. `S.img.crop`, `S.doc` and the grid are not touched.
 
 **Auto-fit (computer vision, `autofit.js` + `cv.js`).** One button sets `S.lens.k1`, `S.img` (rot/scale/x/y) and `S.warp` so the photo
 matches the ticked chip's grid. Steps, in order:
@@ -133,7 +144,7 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 
 ## How-to recipes
 
-* **Add a chip version:** add an object to `CHIPS` in `presets.js` (copy a neighbour). The panel and tests pick it up.
+* **Add a chip version:** add an object to `BUILTIN_CHIPS` in `grid-studio/chips.js` (copy a neighbour), or load a JSON/CSV file via **Load chip list…** in the Chip version panel (`setChipList` mutates `CHIPS` in place; never reassign `CHIPS`). The panel and tests pick it up.
   Run `tests.html`; it checks `pitch = well + wall` and that wells × pitch matches the array size within one pitch.
 * **Add a setting:** field in `S` (`state.js`) → use it where drawn (`grid.js` / `gl.js` …) → one `slider(...)` or
   `checkbox(...)` line in `panels.js` using `setter([...layers], fn)` → optionally an arrow-key step in `KEY_STEP` (`ui.js`).

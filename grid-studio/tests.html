@@ -3,7 +3,7 @@
 <style>body{font:13px/1.5 ui-monospace,Menlo,monospace;background:#1b1b1b;color:#d6d6d6;padding:16px}
 .ok{color:#34c759}.bad{color:#ff3b30;font-weight:700}h1{font:600 16px sans-serif}iframe{position:absolute;left:-9999px;width:1200px;height:800px}</style></head>
 <body><h1>Digital Microscope Gridoverlay Studio: self-tests</h1><div id="out">running…</div>
-<iframe id="app" src="index.html"></iframe>
+<iframe id="app" src="index.html?nostore"></iframe>   <!-- ?nostore: the tests never read or overwrite a chip list remembered by the real app -->
 <!-- Loads the real app in a hidden iframe and checks its maths and behaviour through the app's own globals.
      Open this page the same way as the app (double-click, or http://localhost:8765/tests.html). No libraries. -->
 <script>
@@ -14,9 +14,25 @@ function test(name, fn) { try { const r = fn(); results.push([name, r === undefi
 
 frame.onload = () => setTimeout(async () => {
   const w = frame.contentWindow, E = code => run(w, code);
+  test('clicking empty #hint upload overlay opens file input before an image is loaded', () => {
+    let clicks = 0; const fileIn = w.document.getElementById('file'), orig = fileIn.click;
+    fileIn.click = () => { clicks++; };
+    try {
+      w.document.getElementById('hint').dispatchEvent(new w.MouseEvent('click', {bubbles: true, cancelable: true, button: 0}));
+      return clicks === 1 && w.getComputedStyle(w.document.getElementById('hint')).cursor === 'pointer';
+    } finally { fileIn.click = orig; }
+  });
   E('loadSample()');
+  test('clicking #hint does not open file input after an image is loaded', () => {
+    let clicks = 0; const fileIn = w.document.getElementById('file'), orig = fileIn.click;
+    fileIn.click = () => { clicks++; };
+    try {
+      w.document.getElementById('hint').dispatchEvent(new w.MouseEvent('click', {bubbles: true, cancelable: true, button: 0}));
+      return clicks === 0 && w.document.getElementById('hint').style.display === 'none';
+    } finally { fileIn.click = orig; }
+  });
 
-  // ---- chip table integrity (catches typos in presets.js) ----
+  // ---- chip table integrity (catches typos in chips.js) ----
   for (const c of E('CHIPS')) {
     test(`${c.id}: pitch = well + wall`, () => c.pitch === c.well + c.wall);
     // the table rounds well counts down (V10.2: 66 x 120 = 7920 of 8000, V12: 49 x 200 = 9800 of 10000), so allow up to one pitch of slack
@@ -80,6 +96,87 @@ frame.onload = () => setTimeout(async () => {
     E('S.grid.visible = true'); E('drawGrid')(x, 400, 400, 1); const d = x.getImageData(0, 0, 400, 400).data; let green = 0; for (let i = 0; i < d.length; i += 4) if (d[i] === 0 && d[i + 1] === 255 && d[i + 2] === 0) green++; return green > 20000;
   });
 
+  // ---- chip list file, validation & import (chips.js + js/chiplist.js) ----
+  E("useBuiltinChipList()");                                       // (the app runs with ?nostore here: no remembered list is read, written or deleted)
+  const nBuiltin = E('BUILTIN_CHIPS.length');
+  test(`built-in chips.js is the list the app starts on (${nBuiltin} versions)`, () => {
+    return E('Array.isArray(BUILTIN_CHIPS) && BUILTIN_CHIPS.length > 0 && CHIPS.length === BUILTIN_CHIPS.length && CHIP_STORE_OFF') &&
+      new RegExp(`chips\\.js.*\\(${nBuiltin} versions?\\)`).test(E("$('#chipSource').textContent")) &&
+      E("$('#chipBuiltin').disabled") === true;
+  });
+  test('validateChips accepts a good chip, normalises string numbers, and fills defaults', () => {
+    const r = E(`validateChips([{id: 'V-Test', shape: 'Circle', pitch: '120', well: '80', wide: '50', long: '40'}])`);
+    const c = r.chips[0];
+    return r.errors.length === 0 && r.chips.length === 1 && c.id === 'V-Test' && c.shape === 'circle' &&
+      c.pitch === 120 && c.well === 80 && c.wall === 40 && c.wide === 50 && c.long === 40 &&
+      c.widthUm === 6000 && c.lengthUm === 4800 && c.draft === null;
+  });
+  test('validateChips rejects well > pitch, wall mismatch, duplicate id, and non-integer wells with plain messages', () => {
+    const r = E(`validateChips([
+      {id: 'V-BigWell', pitch: 120, well: 130, wide: 10, long: 10},
+      {id: 'V-BadWall', pitch: 120, well: 80, wall: 30, wide: 10, long: 10},
+      {id: 'V-Ok', pitch: 100, well: 60, wide: 10, long: 10},
+      {id: 'V-Ok', pitch: 100, well: 60, wide: 10, long: 10},
+      {id: 'V-Frac', pitch: 100, well: 60, wide: 10.5, long: 10}
+    ])`);
+    return r.chips.length === 1 && r.chips[0].id === 'V-Ok' && r.errors.length === 4 &&
+      r.errors.some(m => /V-BigWell/.test(m) && /130/.test(m) && /120/.test(m)) &&
+      r.errors.some(m => /V-BadWall/.test(m) && /wall/i.test(m)) &&
+      r.errors.some(m => /V-Ok/.test(m) && /duplicate/i.test(m)) &&
+      r.errors.some(m => /V-Frac/.test(m) && /whole number/i.test(m));
+  });
+  test('parseChipFile parses JSON (array and {chips}) and spreadsheet CSV headers (with quoted fields and ignored cm columns)', () => {
+    const j1 = E(`parseChipFile('[{"id":"J1","pitch":100,"well":60,"wide":20,"long":20}]', 'chips.json')`);
+    const j2 = E(`parseChipFile('{"chips":[{"id":"J2","pitch":150,"well":100,"wide":30,"long":30}]}', 'chips.json')`);
+    const csv = [
+      'Chip Version,Shape,Bottom,Draft Angle,Nominal Pitch,Well size,Top Wall Width,Depth,Array width (cm),Array length (cm),Array width (um),Array length (um),# wells wide,# wells long',
+      'V16-New,Round,"radius 20 µm, polished",5,150,110,40,200,0.9,0.6,9000,6000,60,40'
+    ].join('\n');
+    const cList = E(`parseChipFile(${JSON.stringify(csv)}, 'lab-sheet.csv')`);
+    const v = E(`validateChips(${JSON.stringify(cList)})`).chips[0];
+    let badErr = '';
+    try { E(`parseChipFile('colA,colB\\n1,2', 'bad.csv')`); } catch (e) { badErr = e.message; }
+    return j1.length === 1 && j1[0].id === 'J1' && j2.length === 1 && j2[0].id === 'J2' &&
+      v && v.id === 'V16-New' && v.shape === 'circle' && v.bottom === 'radius 20 µm, polished' &&
+      v.pitch === 150 && v.well === 110 && v.wall === 40 && v.widthUm === 9000 && v.lengthUm === 6000 &&
+      v.wide === 60 && v.long === 40 && /required column/i.test(badErr);
+  });
+  test('setChipList mutates CHIPS in place, ticks and draws a new chip to scale, unticks a removed chip, and refuses an all-invalid list', () => {
+    E('window.__chipsRef = CHIPS');
+    const r1 = E(`setChipList([{id: 'V-Custom', shape: 'square', pitch: 160, well: 120, wide: 25, long: 20}], 'loaded from custom.json')`);
+    E("selectChip('V-Custom')");
+    const L = E('gridLayout(S.doc.w, S.doc.h)');
+    const ratioOk = near(L.size / L.pitchX, 120 / 160, 1e-9) && E('S.chip.id') === 'V-Custom';
+    const rBad = E(`setChipList([{id: 'Broken', pitch: 50, well: 90, wide: 10, long: 10}], 'loaded from bad.json')`);
+    const keptOld = rBad.count === 0 && E('CHIPS.length') === 1 && E('CHIPS[0].id') === 'V-Custom' && E('S.chip.id') === 'V-Custom';
+    const r2 = E(`setChipList([{id: 'V-Other', shape: 'circle', pitch: 100, well: 70, wide: 20, long: 20}], 'loaded from other.json')`);
+    const unticked = r2.count === 1 && E('S.chip.id') === null;
+    const sameRef = E('window.__chipsRef === CHIPS');
+    return r1.count === 1 && ratioOk && keptOld && unticked && sameRef;
+  });
+  test('HTML in a chip id is escaped in the panel and chip info box', () => {
+    E(`setChipList([{id: '<img src=x onerror="window.__xss=1">', pitch: 100, well: 60, wide: 10, long: 10}], 'loaded from xss.json')`);
+    E(`selectChip('<img src=x onerror="window.__xss=1">')`);
+    const noImg = E("$('#chipList').querySelectorAll('img').length === 0 && $('#chipInfo').querySelectorAll('img').length === 0 && !window.__xss");
+    const restored = E("useBuiltinChipList(); selectChip(null); resetImageTransform(); CHIPS.length === BUILTIN_CHIPS.length");
+    return noImg && restored;
+  });
+  test('chip files from real spreadsheets: µ in headers, decimal commas, thousands separators; a well as wide as the pitch and absurd well counts are refused', () => {
+    const mu = E(`validateChips(parseChipFile(${JSON.stringify('Chip Version,Nominal Pitch (µm),Well size (μm),Top Wall Width (µm),Array width (µm),Array length (um),# wells wide,# wells long\nM1,120,80,40,"19,500",9500,83,83')}, 'mu.csv'))`);
+    const semi = E(`validateChips(parseChipFile(${JSON.stringify('Chip Version;Nominal Pitch;Well size;# wells wide;# wells long\nS1;120,5;80,5;10;10')}, 'semi.csv'))`);
+    const bad = E(`validateChips([{id: 'NoWall', pitch: 100, well: 100, wide: 10, long: 10}, {id: 'Huge', pitch: 100, well: 60, wide: 1000, long: 1000}, {id: 'A\\r\\nB', pitch: 100, well: 60, wide: 10, long: 10}])`);
+    const m = mu.chips[0], s1 = semi.chips[0];
+    return mu.errors.length === 0 && m && m.pitch === 120 && m.well === 80 && m.wall === 40 && m.widthUm === 19500 && m.lengthUm === 9500 &&
+      semi.errors.length === 0 && s1 && s1.pitch === 120.5 && s1.well === 80.5 &&
+      bad.chips.length === 1 && bad.chips[0].id === 'A B' && bad.errors.some(e => /NoWall/.test(e) && /smaller than the pitch/.test(e)) && bad.errors.some(e => /Huge/.test(e) && /more than the app can draw/.test(e));
+  });
+  test('loading a chip list keeps the image calibration (µm per pixel) when the ticked chip\'s numbers change', () => {
+    E("selectChip('V12')"); const u0 = E('umPerPx()');
+    E("setChipList(BUILTIN_CHIPS.map(c => c.id === 'V12' ? {...c, pitch: 250, well: 220, wall: 30} : c), 'loaded from changed.json')"); const u1 = E('umPerPx()'), still = E('S.chip.id') === 'V12';
+    E('useBuiltinChipList(); selectChip(null); resetImageTransform()');
+    return still && u0 > 0 && near(u1, u0, 1e-9) && E('CHIPS.length === BUILTIN_CHIPS.length');
+  });
+
   // ---- crop ----
   test('crop only masks the image: canvas and grid are unchanged, undo/reset restore it', () => {
     const grid0 = JSON.stringify(E('gridLayout(S.doc.w, S.doc.h)')), doc0 = E('[S.doc.w, S.doc.h]').join('x');
@@ -105,9 +202,28 @@ frame.onload = () => setTimeout(async () => {
     return near(cr.rot, -20) && near(cr.w, 400) && near(cr.h, 300) && inside && outside;
   });
 
+  test('Crop to array: export is exactly the array (wells + half a wall), on-screen picture is clipped, canvas/grid/image settings untouched', () => {
+    E("resetImageTransform(); resetLens(); resetWarp(); S.img.crop = null; S.grid.visible = true; S.grid.offX = 0; S.grid.offY = 0; selectChip('V12'); setChipFit(true)");
+    const before = JSON.stringify(E('[S.doc.w, S.doc.h, S.img.x, S.img.y, S.img.scale, S.img.rot, S.img.crop, gridLayout(S.doc.w, S.doc.h)]')), P = E('activePreset()'), L = E('gridLayout(S.doc.w, S.doc.h)');
+    const off = E('buildExportCanvas({image: true, grid: true})'), offOk = off.width === E('S.doc.w') && off.height === E('S.doc.h') && E('dom.gl.style.clipPath') === '';
+    E('setArrayOnly(true); frame()'); const r = E('arrayCropRect()'), c = E('buildExportCanvas({image: true, grid: true})'), whole = E('buildExportCanvas({image: true, grid: true, array: false})');
+    const sized = Math.abs(c.width - P.wide * L.pitchX) <= 1 && Math.abs(c.height - P.long * L.pitchY) <= 1 && Math.abs(r.x - (L.x0 - (L.pitchX - L.size) / 2)) <= .5 && Math.abs(r.y - (L.y0 - (L.pitchY - L.size) / 2)) <= .5;
+    const a = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, b = whole.getContext('2d').getImageData(r.x, r.y, r.w, r.h).data; let same = a.length === b.length;
+    for (let i = 0; same && i < a.length; i += 97) same = a[i] === b[i];                                   // the array PNG = that part of the whole-canvas PNG
+    const clipped = /^inset\(/.test(E('dom.gl.style.clipPath')), name = E('exportFileName()'), box = E("$('#exArray').checked");
+    const untouched = before === JSON.stringify(E('[S.doc.w, S.doc.h, S.img.x, S.img.y, S.img.scale, S.img.rot, S.img.crop, gridLayout(S.doc.w, S.doc.h)]'));
+    E('setChipMargin(0); frame()'); const z = E('arrayRect()'), zc = E('arrayCropRect()'), zeroRoom = z.x >= -.51 && z.y >= -.51 && z.x + z.w <= E('S.doc.w') + .51 && Math.abs(zc.w - z.w) <= 1 && Math.abs(zc.h - z.h) <= 1;   // no dead room: the half wall is still on the canvas
+    E('setChipMargin(8); S.grid.offX = 5000; refresh("grid"); frame()'); const offCanvas = E('arrayCropRect()') === null && /outside the canvas/.test(E("$('#arrayCropInfo').textContent"));
+    E('S.grid.offX = 0; refresh("grid"); frame()'); const infoBack = /^On: /.test(E("$('#arrayCropInfo').textContent"));
+    E('setChipFit(false); frame()'); const needsFit = E('arrayCropRect()') === null && E('dom.gl.style.clipPath') === '' && E("$('#exArray').disabled") && E('S.chip.arrayOnly') === false;
+    E('setChipFit(true); setArrayOnly(true); selectChip(null); frame()'); const offWithChip = E('S.chip.arrayOnly') === false;   // unticking the chip switches it off for good
+    E("selectChip('V11'); frame()"); const staysOff = E('arrayCropRect()') === null && E('dom.gl.style.clipPath') === ''; E('selectChip(null); frame()');
+    return offOk && sized && same && clipped && name === 'array-V12.png' && box && untouched && zeroRoom && offCanvas && infoBack && needsFit && offWithChip && staysOff && E('dom.gl.style.clipPath') === '' && E('exportFileName()') === 'grid-overlay.png';
+  });
+
   // ---- software renderer (used when WebGL / hardware acceleration is off) ----
   // 1) forced software mode in a second copy of the app: index.html?renderer=cpu
-  const f2 = document.createElement('iframe'); f2.src = 'index.html?renderer=cpu&t=' + Date.now(); document.body.append(f2);
+  const f2 = document.createElement('iframe'); f2.src = 'index.html?renderer=cpu&nostore&t=' + Date.now(); document.body.append(f2);
   await new Promise(r => f2.onload = r); await new Promise(r => setTimeout(r, 500));
   const w2 = f2.contentWindow, E2 = code => w2.eval(code);
   E2('loadSample()');
@@ -138,7 +254,7 @@ frame.onload = () => setTimeout(async () => {
 
   // ---- Auto-fit (computer vision): synthetic chip photos with a KNOWN tilt and fisheye, checked in the rendered picture ----
   // Runs in a fresh copy of the app (the main iframe was switched to the software renderer above).
-  const f3 = document.createElement('iframe'); f3.src = 'index.html?t=' + Date.now(); document.body.append(f3);
+  const f3 = document.createElement('iframe'); f3.src = 'index.html?nostore&t=' + Date.now(); document.body.append(f3);
   await new Promise(r => f3.onload = r); await new Promise(r => setTimeout(r, 500));
   const w3 = f3.contentWindow, E3 = code => w3.eval(code);
   E3(`

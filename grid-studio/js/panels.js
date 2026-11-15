@@ -44,13 +44,88 @@ function buildGridPanel() {
   note(p, 'The grid is fixed to the canvas — it stays put while you move, rotate or correct the image underneath.');
 }
 
-/** Chip versions (presets.js). Ticking one switches the grid to true-to-scale chip geometry. */
+/** Rebuild the chip checkbox list and update source/message readouts in the Chip version panel. */
+let chipRowEls = [];
+function syncChipRows() {
+  for (let i = 0; i < chipRowEls.length; i++) {
+    const {label, cb, id} = chipRowEls[i], on = id === S.chip.id;
+    if (cb.checked !== on) cb.checked = on;
+    label.classList.toggle('on', on);
+  }
+}
+function renderChipList() {
+  const list = $('#chipList');
+  if (list) {
+    list.innerHTML = CHIPS.map(c => `<label class="chip"><input type="checkbox" data-id="${escHtml(c.id)}"><span><b>${escHtml(c.id)}</b><small>${escHtml(c.shape)} · pitch ${escHtml(c.pitch)} / well ${escHtml(c.well)} µm</small></span></label>`).join('');
+    chipRowEls = [...list.querySelectorAll('.chip')].map(label => {
+      const cb = label.querySelector('input'), id = cb.dataset.id;
+      cb.onchange = () => selectChip(cb.checked ? id : null);          // ticking one unticks the others
+      return {label, cb, id};
+    });
+    syncChipRows();
+  }
+  const srcEl = $('#chipSource');
+  if (srcEl) srcEl.textContent = `Chip list: ${chipListSource} (${CHIPS.length} ${CHIPS.length === 1 ? 'version' : 'versions'})`;
+  const msgEl = $('#chipListInfo');
+  if (msgEl) msgEl.textContent = chipListMessages.join(' ');
+  const bBtn = $('#chipBuiltin');
+  if (bBtn) bBtn.disabled = isUsingBuiltinChips();
+}
+
+function loadChipFileFromInput(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const raw = parseChipFile(reader.result, file.name);
+      const label = `loaded from ${file.name}`;
+      const {count, errors} = setChipList(raw, label);
+      if (count > 0) {
+        const kept = saveChipListToStorage(label, CHIPS), tail = kept ? '' : ' — not remembered for next time (browser storage is unavailable)';
+        if (!kept) { chipListMessages.push('This list will not be remembered after you close the page: the browser would not store it.'); renderChipList(); }
+        toast((errors.length ? `Loaded ${count} chip versions (${errors.length} skipped)` : `Loaded ${count} chip versions from ${file.name}`) + tail);
+      } else {
+        toast(`Could not load ${file.name}: no valid chip versions`);
+      }
+    } catch (err) {
+      chipListMessages = [err.message || String(err)];
+      renderChipList();
+      toast(err.message || 'Could not read chip file');
+    }
+  };
+  reader.onerror = () => {
+    chipListMessages = [`Could not read file "${file.name}".`];
+    renderChipList();
+    toast(`Could not read file "${file.name}"`);
+  };
+  reader.readAsText(file);
+}
+
+function saveChipListFile() {
+  const blob = new Blob([JSON.stringify(CHIPS, null, 2) + '\n'], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'chips.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/** Chip versions (the list: chiplist.js; its scale: presets.js). Ticking one switches the grid to true-to-scale chip geometry. */
 function buildChipPanel() {
   const p = $('#p-chip');
-  const list = document.createElement('div'); list.className = 'chips';
-  list.innerHTML = CHIPS.map(c => `<label class="chip"><input type="checkbox" data-id="${c.id}"><span><b>${c.id}</b><small>${c.shape} · pitch ${c.pitch} / well ${c.well} µm</small></span></label>`).join('');
+  const list = document.createElement('div'); list.id = 'chipList'; list.className = 'chips';
   p.append(list);
-  list.querySelectorAll('input').forEach(cb => cb.onchange = () => selectChip(cb.checked ? cb.dataset.id : null));   // ticking one unticks the others
+
+  note(p, '', 'chipSource');
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file'; fileIn.accept = '.json,.csv,.txt'; fileIn.hidden = true;
+  fileIn.onchange = e => { loadChipFileFromInput(e.target.files[0]); e.target.value = ''; };
+  p.append(fileIn);
+  buttons(p, [
+    ['chipLoad', 'Load chip list…', '', () => fileIn.click()],
+    ['chipSave', 'Save chip list…', '', saveChipListFile],
+    ['chipBuiltin', 'Use built-in list', '', () => { const r = useBuiltinChipList(); toast(`Using built-in chip list (${r.count} versions)`); }],
+  ]);
+  note(p, '', 'chipListInfo');
+  renderChipList();
 
   const tools = document.createElement('div'); p.append(tools);       // greyed out until a chip is ticked
   checkbox(tools, 'Fit canvas to array', () => S.chip.fit, setChipFit, 'canvas = the N × M wells + border');
@@ -60,12 +135,16 @@ function buildChipPanel() {
   const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);   // filled by updateChipInfo()
   note(p, 'Tick a version: the grid takes its shape, well size and pitch from the table, true to scale, and the canvas is sized to the real array plus a border. Then move / scale / rotate the image until it lines up with the wells — the µm/px readout is your image\'s calibration. Untick for the manual grid.');
 
+  const manual = $('#gridManual'), bBtn = $('#chipBuiltin'), afBtn = $('#afButton'), afUndoBtn = $('#afUndo');
   syncs.push(() => {
-    list.querySelectorAll('.chip').forEach(l => { const cb = l.querySelector('input'), on = cb.dataset.id === S.chip.id; cb.checked = on; l.classList.toggle('on', on); });
-    tools.classList.toggle('off', !S.chip.id); tools.inert = !S.chip.id;
-    const manual = $('#gridManual'); manual.classList.toggle('off', !!S.chip.id); manual.inert = !!S.chip.id;
+    syncChipRows();
+    const hasChip = !!S.chip.id;
+    tools.classList.toggle('off', !hasChip); tools.inert = !hasChip;
+    if (manual) { manual.classList.toggle('off', hasChip); manual.inert = hasChip; }
     updateChipInfo();
-    $('#afButton').disabled = !S.chip.id || !S.img.el; $('#afUndo').disabled = !afUndoState;
+    if (bBtn) bBtn.disabled = isUsingBuiltinChips();
+    if (afBtn) afBtn.disabled = !hasChip || !S.img.el;
+    if (afUndoBtn) afUndoBtn.disabled = !afUndoState;
   });
 }
 
@@ -107,6 +186,11 @@ function buildCropPanel() {
   $('#cRatio').onchange = e => { S.ratio = +e.target.value; const r = ratioValue(); if (S.crop && r) { fitRatio(r); dirty('crop'); } };
   buttons(p, [['cStart', 'Crop tool', '', () => setTool('crop')], ['cropApply', 'Apply crop', 'primary', applyCrop], ['cCancel', 'Cancel', '', cancelCrop], ['cReset', 'Reset crop', '', resetCrop]]);
   note(p, '', 'cropInfo');                                            // text set by updateCrop()
+  // "Crop to array": not a hand-drawn crop but a preset tied to the grid — shows and exports exactly the array's outer edge.
+  const arr = document.createElement('div'); p.append(arr);
+  checkbox(arr, 'Crop to array', () => S.chip.arrayOnly && !!arrayRect(), setArrayOnly, 'show + export only the array');
+  note(arr, '', 'arrayCropInfo');
+  syncs.push(() => { arr.querySelector('input').disabled = !arrayRect(); });      // (the text under it is kept up to date by updateArrayMask() in grid.js)
   note(p, 'Crop only trims the image — the canvas and the grid never change, and the edges stay straight as drawn even if the image is rotated. Drag to draw, drag handles to resize, Enter to apply, Esc to cancel, ⌘/Ctrl+Z to undo, Reset crop to bring the whole image back.');
 }
 

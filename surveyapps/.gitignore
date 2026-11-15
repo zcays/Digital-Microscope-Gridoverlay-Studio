@@ -9,3 +9,5 @@ test-results/
 .venv-x64/
 *.log
 npm-audit.json
+
+dist-local/

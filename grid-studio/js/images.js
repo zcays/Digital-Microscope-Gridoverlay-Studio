@@ -37,9 +37,9 @@ function loadFile(file) {
 /* ---- sample: a straight test scene pushed through a barrel distortion ---- */
 function drawTestScene(w, h) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
-  const sky = x.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#6f8fb0'); sky.addColorStop(1, '#2d3a47');
+  const sky = x.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, '#909090'); sky.addColorStop(1, '#383838');
   x.fillStyle = sky; x.fillRect(0, 0, w, h);
-  for (const [color, ...r] of [['#b5603a', 300, 300, 400, 560], ['#e3d6a7', 760, 380, 560, 340], ['#3d7a52', 1380, 250, 300, 600]]) { x.fillStyle = color; x.fillRect(...r); }
+  for (const [color, ...r] of [['#707070', 300, 300, 400, 560], ['#d0d0d0', 760, 380, 560, 340], ['#555555', 1380, 250, 300, 600]]) { x.fillStyle = color; x.fillRect(...r); }
   x.strokeStyle = '#fff'; x.lineWidth = 3;
   for (let i = 0; i <= w; i += 100) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); }
   for (let j = 0; j <= h; j += 100) { x.beginPath(); x.moveTo(0, j); x.lineTo(w, j); x.stroke(); }

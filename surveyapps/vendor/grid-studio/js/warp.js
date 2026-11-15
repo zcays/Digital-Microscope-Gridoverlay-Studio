@@ -50,8 +50,11 @@ function warpActive() {
 function resetWarp() { const keep = S.warp.enabled; Object.assign(S.warp, defaultWarp(), {enabled: keep}); refresh('gl', 'warp'); }
 
 /** Vertex data for the GL mesh: clip x, clip y, texture u, texture v (flipped to match the offscreen texture). */
+let warpMeshBuf = null;
 function warpMesh(n) {
-  const P = warpControlPoints(), out = new Float32Array((n + 1) * (n + 1) * 4); let o = 0;
+  const P = warpControlPoints(), len = (n + 1) * (n + 1) * 4;
+  if (!warpMeshBuf || warpMeshBuf.length !== len) warpMeshBuf = new Float32Array(len);
+  const out = warpMeshBuf; let o = 0;
   for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
     const u = i / n, v = j / n, p = warpPoint(u, v, P);
     out[o++] = p.x * 2 - 1; out[o++] = 1 - p.y * 2; out[o++] = u; out[o++] = 1 - v;
