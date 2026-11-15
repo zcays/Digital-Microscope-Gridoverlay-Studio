@@ -336,3 +336,11 @@ Known limits / unverified:
 ## Release preparation (2026-11-15)
 
 The user authorized committing, pushing both repositories, and updating installation artifacts. SurveyApps is being bumped to 1.0.3 to distinguish the new settings/filename features from the published 1.0.2. The preceding local-only entries are historical. Settings validation uses the wider sanity bounds in settings.js, rather than slider travel, so Auto-fit values outside slider ranges can round-trip.
+
+## SurveyApps 1.0.3 release validation (2026-11-15)
+
+Studio settings/filename changes were committed as 5082a2c, with the SurveyApps vendor snapshot pinned to that full SHA. Both repositories were pushed to main. SurveyApps 1.0.3 updates app/lockfile version metadata, shell labels, README, INSTALL (including upgrade and settings workflows), DELIVERY and validation docs. A broad initial lockfile substitution also changed transitive dependency strings; CI caught it before publication. Follow-up commits restore every dependency entry byte-for-byte to the prior release while retaining the app version bump.
+
+Source tests passed 158/158 (both private photos active); Python 9/9; local ARM64 packaged 9/9 groups, 158/158 embedded self-tests, zero unexpected errors/orphan processes. All 33 packaged runtime files match source; no samples are shipped. Strict ad-hoc signature, DMG checksum and ZIP CRC checks passed. Local app and installer: surveyapps/dist-local/mac-arm64/SurveyApps!.app and SurveyApps-1.0.3-mac-arm64.dmg/.zip.
+
+CI run https://github.com/zcays/SurveyApps/actions/runs/43771893801 passed all three platforms at standalone SurveyApps commit 9b6e77a541f0d4fd26873caae633a60228a3bdd2: Python 9/9 each; desktop 9/9 Mac, 8/8 Windows; Grid Studio 158/158 ARM64/Windows, 150/150 Intel software fallback. Six CI-built installers/archives plus the source ZIP are collected in surveyapps/dist; SHA256SUMS.txt covers all seven. Release v1.0.3 is staged as a draft while upload completion and remote digest checks finish; publish only after all eight assets are uploaded and verified.

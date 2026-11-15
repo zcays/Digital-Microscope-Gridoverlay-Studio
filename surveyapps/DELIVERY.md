@@ -11,7 +11,7 @@ Download the installer for macOS or Windows from [GitHub Releases (`v1.0.3`)](ht
 
 Version 1.0.3 adds Grid Studio alignment settings JSON save/load, ⌘/Ctrl+S, settings-file drop, and the loaded image filename in the top bar. The settings contain alignment data; keep the original image and any custom chip list separately. The Help page explains the workflow.
 
-Builds and validation for each release are recorded in [docs/VALIDATION.md](docs/VALIDATION.md) and the linked GitHub Actions run on the release page. The release contains installers for Apple Silicon, Intel Mac, and Windows x64, plus source and SHA-256 checksums.
+All three platforms passed [GitHub Actions run 43771893801](https://github.com/zcays/SurveyApps/actions/runs/43771893801): Python 9/9 on each platform, packaged desktop 9/9 groups on both Macs and 8/8 on Windows, and Grid Studio 158/158 (150/150 with Intel software rendering). Full evidence is recorded in [docs/VALIDATION.md](docs/VALIDATION.md). The release contains installers for Apple Silicon, Intel Mac, and Windows x64, plus source and SHA-256 checksums.
 
 macOS bundles carry valid ad-hoc integrity signatures (`codesign --verify --deep --strict`), and Windows binaries are unsigned (no Developer ID/Apple notarization or Windows Authenticode certificate). Minimum configured macOS is 14.0; older macOS versions and interactive NSIS/SmartScreen GUI flows on physical Windows hardware were not separately exercised outside CI. See [INSTALL.md](INSTALL.md) for unsigned-app first-launch approval steps after verifying `SHA256SUMS.txt`.
 
