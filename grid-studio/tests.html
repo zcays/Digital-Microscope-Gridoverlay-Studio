@@ -177,6 +177,138 @@ frame.onload = () => setTimeout(async () => {
     return still && u0 > 0 && near(u1, u0, 1e-9) && E('CHIPS.length === BUILTIN_CHIPS.length');
   });
 
+  // ---- portable settings files + image names (restore everything before the crop tests below) ----
+  {
+    const original = E('settingsSnapshot()'), originalImage = E('S.img.el');
+    const transient = E('({crop:S.crop, tool:S.tool, zoom:S.zoom, undo:undoStack.slice(), af:afUndoState, waiting:waitingSettings, source:settingsSource, info:$("#settingsInfo").textContent})');
+    const normal = s => JSON.stringify(s, (k, v) => k === 'savedAt' ? undefined : v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]])) : v);
+    const copy = s => JSON.parse(JSON.stringify(s));
+    const pixels = canvas => ({w: canvas.width, h: canvas.height, d: canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data});
+    const samePixels = (a, b) => a.w === b.w && a.h === b.h && a.d.every((v, k) => v === b.d[k]);
+    const configure = `selectChip('V12'); setChipFit(true); setChipMargin(12);
+      Object.assign(S.doc, {w:480, h:360});
+      Object.assign(S.img, {name:'alignment-photo.tiff', x:23.5, y:-16.25, scale:1.17, rot:13.2, crop:{x:60,y:40,w:900,h:600,rot:-13.2}});
+      Object.assign(S.lens, {k1:.12,k2:-.03,cx:.47,cy:.52,bypass:false});
+      Object.assign(S.warp, defaultWarp()); S.warp.c.nw.x=.02; S.warp.c.se.y=.96; S.warp.dev.n.y=.01; S.warp.dev.e.x=-.013;
+      S.warp.mesh={n:17,d:Array.from({length:578},(_,k)=>.002*Math.sin(k*.37))};
+      Object.assign(S.grid, {visible:true,mode:'filled',color:'#34c759',opacity:.43,shape:'circle',size:17,gapX:9,gapY:13,mL:12,mR:24,mT:15,mB:20,center:false,offX:3,offY:-4,cols:8,rows:6,radius:3,stroke:1.25});
+      S.chip.arrayOnly=true; S.ratio=4/3; $('#exImg').checked=true; $('#exGrid').checked=true;
+      refresh('gl','grid','layout','crop','warp','status');`;
+    try {
+      E(configure);
+      const good = E('settingsSnapshot()'), beforePixels = pixels(E('buildExportCanvas()'));
+      test('settings snapshot is detached data with no pixels, view, tools or undo history', () => {
+        const s = E('settingsSnapshot()'); s.warp.c.nw.x = 9; s.chip.definition.well = 1;
+        return s.kind === 'grid-studio-settings' && s.version === 1 && s.image.name === 'alignment-photo.tiff' && !('el' in s.img) && !('zoom' in s) && !('tool' in s) && !('undoStack' in s) && E('S.warp.c.nw.x') === .02 && E('activePreset().well') !== 1;
+      });
+      test('settings save → change many settings → load restores state, object identities and export pixels exactly', () => {
+        const refs = E('[S.img,S.lens,S.warp,S.grid,S.chip]');
+        E(`selectChip(null); setChipFit(false); resetImageTransform(); resetLens(); resetWarp();
+          S.img.crop=null; S.ratio=0; S.doc.w=600; S.doc.h=400; S.grid.mode='outline'; S.grid.color='#ffffff'; S.grid.opacity=1; S.grid.offX=90;
+          $('#exImg').checked=false; $('#exGrid').checked=false; undoStack.push({crop:null}); afUndoState=afSnapshot();`);
+        const parsed = E('parseSettings')(E('settingsToText')(good)).settings, r = E('applySettings')(parsed);
+        const after = E('settingsSnapshot()'), newRefs = E('[S.img,S.lens,S.warp,S.grid,S.chip]');
+        return r.ok && !r.warnings.length && normal(good) === normal(after) && refs.every((v,k)=>v===newRefs[k]) &&
+          samePixels(beforePixels, pixels(E('buildExportCanvas()'))) && beforePixels.d.some((v,k)=>k%4===3 && v>0) && E('undoStack.length===0 && afUndoState===null && S.crop===null') &&
+          E(`$('#gMode').value==='filled' && $('#gShape').value==='circle' && $('#cRatio').value===String(4/3) && $('#exArray').checked && $('#afUndo').disabled`);
+      });
+      test('settings before image and image before settings end in the same state; waiting file is used once', () => {
+        E('Object.assign(S.img,{el:null,name:"",w:0,h:0})');
+        const r = E('applySettings')(good), waits = E('waitingSettings!==null') && /Now open alignment-photo.tiff/.test(E('$("#settingsInfo").textContent'));
+        E('setImage')(originalImage, good.image.name);
+        const first = E('settingsSnapshot()'), used = E('waitingSettings===null');
+        E('setImage')(originalImage, good.image.name); const reset = E('S.img.rot===0 && S.img.crop===null');
+        E('applySettings')(good);
+        return r.ok && waits && used && reset && normal(first) === normal(E('settingsSnapshot()')) && normal(first) === normal(good);
+      });
+      const invalid = [
+        ['broken JSON', null, /complete JSON/i], ['wrong kind', s=>s.kind='other-app', /not a Grid Studio/i],
+        ['newer version', s=>s.version=2, /newer version of the studio/i], ['NaN', s=>s.lens.k1=NaN, /finite number/i],
+        ['out-of-range lens', s=>s.lens.k1=9, /between/i], ['wrong mesh length', s=>s.warp.mesh.d.pop(), /wrong number of points/i],
+        ['number as text', s=>s.img.scale='1.2', /finite number/i], ['boolean as number', s=>s.chip.fit=1, /true or false/i],
+        ['bad colour', s=>s.grid.color='red', /hex colour/i], ['unknown choice', s=>s.grid.mode='dots', /recognised choice/i],
+        ['zero crop', s=>s.img.crop.w=0, /greater than zero/i], ['oversized mesh', s=>s.warp.mesh.n=1000, /between/i],
+      ];
+      for (const [name, change, message] of invalid) test(`settings refuse ${name} with a plain message and no state change`, () => {
+        const before = normal(E('settingsSnapshot()')), refs = E('[S.img,S.lens,S.warp,S.grid,S.chip]'), s = copy(good);
+        let reason = '';
+        if (!change) { try { E('parseSettings')('{broken'); } catch(e) { reason=e.message; } }
+        else { change(s); const r = E('applySettings')(s); if (!r.ok) reason=r.reason; }
+        return message.test(reason) && normal(E('settingsSnapshot()')) === before && refs.every((v,k)=>v===E('[S.img,S.lens,S.warp,S.grid,S.chip]')[k]);
+      });
+      test('settings parse rejects non-finite JSON numbers before applying anything', () => {
+        const text = E('settingsToText')(good).replace('"k1": 0.12', '"k1": 1e999'), before=normal(E('settingsSnapshot()'));
+        let reason=''; try { E('parseSettings')(text); } catch(e) { reason=e.message; }
+        return /finite number/.test(reason) && normal(E('settingsSnapshot()'))===before;
+      });
+      test('settings refuse a missing chip and explain how to load its list first', () => {
+        const s=copy(good), before=normal(E('settingsSnapshot()')); s.chip.id=s.chip.definition.id='Missing version';
+        const r=E('applySettings')(s);
+        return !r.ok && /Missing version/.test(r.reason) && /Load chip list…/.test(r.reason) && normal(E('settingsSnapshot()'))===before;
+      });
+      test('settings warn when a known chip has different drawing measurements', () => {
+        const s=copy(good); s.chip.definition.well-=1; s.chip.definition.wall+=1;
+        const r=E('applySettings')(s); return r.ok && r.warnings.some(m=>/different well or array measurements/.test(m));
+      });
+      test('settings warn clearly about a different image size, and mildly about a different name', () => {
+        const s=copy(good); s.image.width+=1; const size=E('applySettings')(s);
+        s.image.width=good.image.width; s.image.name='other.tiff'; const name=E('applySettings')(s);
+        return size.ok && size.warnings.some(m=>/different-sized picture/.test(m)) && name.ok && name.warnings.some(m=>/file name is different/.test(m));
+      });
+      test('settings ignore unknown keys at every level and clamp canvas and dead room as the app does', () => {
+        const s=copy(good); s.extra={x:1}; s.img.extra=99; s.lens.extra='unused'; s.warp.c.nw.extra=1; s.chip.definition.extra=1;
+        const parsed=E('parseSettings')(E('settingsToText')(s)).settings, result=E('applySettings')(parsed);
+        const same=normal(E('settingsSnapshot()'))===normal(good);
+        s.canvas.w=99999; s.canvas.h=1; s.chip.margin=99; const clamped=E('parseSettings')(E('settingsToText')(s)).settings;
+        E('applySettings')(good);
+        return result.ok && same && !('extra' in parsed) && !('extra' in parsed.img) && clamped.canvas.w===8192 && clamped.canvas.h===16 && clamped.chip.margin===40;
+      });
+      test('image file name is text only; long names use a middle ellipsis and keep the extension', () => {
+        E(`S.img.name='<b>unsafe</b>.png'; updateImageName()`);
+        const safe=E(`$('#imgName').textContent==='<b>unsafe</b>.png' && $('#imgName').children.length===0`);
+        E(`S.img.name='a-very-long-microscope-image-file-name-with-important-ending.tiff'; updateImageName()`);
+        const el=w.document.getElementById('imgName');
+        return safe && /…/.test(el.textContent) && el.textContent.endsWith('.tiff') && el.title.includes(E('S.img.name')) && el.title.includes('1200 × 800');
+      });
+      test('sample and pasted pictures have plain names; unnamed images use the fallback settings filename', () => {
+        E('loadSample()'); const sample=E(`S.img.name==='Sample image' && $('#imgName').textContent==='Sample image'`);
+        E('setImage')(originalImage, 'Pasted image'); const pasted=E(`$('#imgName').textContent==='Pasted image'`);
+        E('S.img.name=""'); const fallback=E('settingsFileName()')==='grid-studio-settings.json';
+        E('applySettings')(good); return sample && pasted && fallback;
+      });
+      test('Cmd/Ctrl+S prevent browser save and trigger the JSON download path without throwing', () => {
+        const proto=w.HTMLAnchorElement.prototype, click=proto.click, names=[];
+        proto.click=function(){names.push(this.download);};
+        try {
+          E(`S.img.name='my-photo.tiff'`);
+          for (const modifier of ['ctrlKey','metaKey']) {
+            const event=new w.KeyboardEvent('keydown',{key:'s',[modifier]:true,bubbles:true,cancelable:true});
+            w.dispatchEvent(event); if(!event.defaultPrevented) return false;
+          }
+          return names.length===2 && names.every(n=>n==='my-photo.gridstudio.json');
+        } finally {proto.click=click;}
+      });
+      const fSettings=document.createElement('iframe'); fSettings.src='index.html?nostore&renderer=cpu'; document.body.append(fSettings);
+      await new Promise(r=>fSettings.onload=r);
+      const EC=code=>fSettings.contentWindow.eval(code);
+      try {
+        EC('loadSample()'); EC(configure);
+        test('software renderer: settings round trip restores exact state and rendered export pixels', () => {
+          const s=EC('settingsSnapshot()'), a=pixels(EC('buildExportCanvas()'));
+          EC('selectChip(null); resetImageTransform(); resetLens(); resetWarp(); S.img.crop=null; S.grid.visible=false');
+          const r=EC('applySettings')(EC('parseSettings')(EC('settingsToText')(s)).settings);
+          return r.ok && EC('rendererName()')==='software' && normal(s)===normal(EC('settingsSnapshot()')) && samePixels(a,pixels(EC('buildExportCanvas()')));
+        });
+      } finally {fSettings.remove();}
+    } finally {
+      E('waitingSettings=null'); E('setImage')(originalImage, original.image.name); E('applySettings')(original);
+      E('undoStack').splice(0,Infinity,...transient.undo); E('S').crop=transient.crop;
+      E('S').zoom=transient.zoom; E('setTool')(transient.tool);
+      E('(v)=>{afUndoState=v.af; waitingSettings=v.waiting; settingsSource=v.source; $("#settingsInfo").textContent=v.info;}')(transient);
+      E('updateImageName(); refresh("gl","grid","layout","crop","warp","status")');
+    }
+  }
+
   // ---- crop ----
   test('crop only masks the image: canvas and grid are unchanged, undo/reset restore it', () => {
     const grid0 = JSON.stringify(E('gridLayout(S.doc.w, S.doc.h)')), doc0 = E('[S.doc.w, S.doc.h]').join('x');

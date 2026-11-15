@@ -21,6 +21,9 @@ function wireTopBar() {
   const fileIn = $('#file'), cbArray = $('#exArray');
   fileIn.onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
   dom.emptyHint.onclick = e => { if (e.button === 0 && !panMode && !S.img.el) fileIn.click(); };
+  $('#settingsSave').onclick = saveSettings;
+  $('#settingsLoad').onclick = () => $('#settingsFile').click();
+  $('#settingsFile').onchange = e => { loadSettingsFile(e.target.files[0]); e.target.value = ''; };
   $('#sample').onclick = loadSample;
   $('#undo').onclick = undoCrop;
   $('#export').onclick = exportPng;
@@ -37,9 +40,9 @@ function wireTopBar() {
   document.querySelectorAll('.tool').forEach(b => b.onclick = () => setTool(b.dataset.tool));
   $('#zIn').onclick = zoomIn; $('#zOut').onclick = zoomOut; $('#zFit').onclick = fitZoom; $('#z100').onclick = () => setZoom(1);
 
-  dom.ws.addEventListener('dragover', e => e.preventDefault());                       // drop an image file onto the workspace
-  dom.ws.addEventListener('drop', e => { e.preventDefault(); loadFile(e.dataTransfer.files[0]); });
-  addEventListener('paste', e => { const f = e.clipboardData && e.clipboardData.files[0]; if (f) loadFile(f); });
+  dom.ws.addEventListener('dragover', e => e.preventDefault());                       // drop an image or settings file onto the workspace
+  dom.ws.addEventListener('drop', e => { e.preventDefault(); loadWorkspaceFile(e.dataTransfer.files[0]); });
+  addEventListener('paste', e => { const f = e.clipboardData && e.clipboardData.files[0]; if (f) loadWorkspaceFile(f, true); });
   addEventListener('resize', () => { if (!S.img.el) fitZoom(); });
   addEventListener('load', () => { if (!S.img.el) fitZoom(); });                     // layout is not measurable before load
 }

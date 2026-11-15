@@ -58,6 +58,7 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 - Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back); a crop drawn on a rotated image keeps the straight edges you drew
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
 - **Crop to array**: one tick (Crop panel, or "array only" next to Export) trims the picture to the array's outer edge — all wells plus half a wall around them — and Export PNG then saves exactly that and nothing more (`array-<chip>.png`). Line the photo up first (the dead room around the array helps with that), then tick it; untick it to see the dead room again
+- **Save / load settings:** keep an alignment in a small JSON file and reopen it with the image later, in either order. The top bar shows the open image’s file name (hover for the full name and pixel size).
 - PNG export of image + grid (both, or either one) at the full canvas resolution, including fisheye correction, distortion and crop
 - Grid line ("wall") thickness is adjustable (Line width) and scales with the canvas size so it stays clearly visible
 
@@ -76,6 +77,15 @@ A CSV exported from the lab's spreadsheet works directly. Example header row and
 Chip Version,Shape,Bottom,Draft Angle,Nominal Pitch,Well size,Top Wall Width,Depth,Array width (um),Array length (um),# wells wide,# wells long
 V16,square,draft angle 5%,5,150,110,40,200,9000,9000,60,60
 ```
+
+## Settings file
+
+Click **Save settings…** (or `⌘/Ctrl+S`) to download `<image name>.gridstudio.json`. Without a named image it is called `grid-studio-settings.json`.
+To return to the alignment, use **Load settings…** or drop the JSON onto the workspace, then open the original image. You can open the image first instead. A settings file opened before an image waits for the next image, once; the message says which image to open.
+
+The file keeps canvas size, chip selection and its measurements, image position/scale/rotation, fisheye, distortion handles and fine correction, image crop, grid appearance, crop aspect, Crop to array and export checkboxes. It contains **no image pixels**; keep your original image separately. The app reports the settings filename, saved time and any warnings beside the panels. A different image size or changed chip measurements needs an alignment check. A missing custom chip must first be added through **Load chip list…** in the Chip version panel.
+
+Loading checks the whole file before changing anything and clears crop / auto-fit undo. View zoom and the active tool are not saved. The file is versioned (`kind: "grid-studio-settings"`, `version: 1`); newer formats need a newer studio.
 
 ## Auto-fit
 
@@ -119,6 +129,7 @@ Press `?` (or `H`) in the app to see this list. On Mac use `⌘` where it says `
 | `Enter` / `Esc` | Apply / cancel a crop (`Esc` also leaves the Distort tool) |
 | `Ctrl+Z` | Undo the last crop (image only) |
 | `Ctrl+O` / `Ctrl+E` | Open an image / export PNG |
+| `Ctrl+S` | Save settings as JSON (load through **Load settings…** or drop the JSON) |
 | `?` or `H` | Show the shortcut list |
 
 **Distort tool:** drag a corner to move it, drag a side to move the whole edge, `Alt`-drag a side to bend it.
@@ -136,5 +147,5 @@ Self-tests: open `grid-studio/tests.html` (should say PASS).
 
 `grid-studio/index.html` is the page, `grid-studio/chips.js` is the editable built-in chip table, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
 `state` (state + scheduler), `presets` (chip scale), `chiplist` (chip list: validation, import), `actions`, `warp` (distort), `gl` (GPU image layer), `cpu` (software image layer), `render` (picks one), `images`, `grid`,
-`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit analysis) + `autofit-app` (its buttons), `ui` + `panels` (settings), `tools` (mouse), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
+`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit analysis) + `autofit-app` (its buttons), `ui` + `panels` (settings), `tools` (mouse), `settings` (alignment JSON + image name), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
 loaded in order, which is why the app also works from disk. Built-in chip data lives in `grid-studio/chips.js`.

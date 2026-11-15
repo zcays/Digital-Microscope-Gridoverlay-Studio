@@ -45,6 +45,7 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `ui.js` | Widget helpers: `slider`, `checkbox`, `buttons`, `line`, `note`, `setter`, `KEY_STEP` | add a new kind of control |
 | `panels.js` | Builds the right-hand panels from the widgets | add a slider / setting |
 | `tools.js` | Active tool, `setTool`, mouse/touch dispatch, pan + image-move drags | add a tool |
+| `settings.js` | Alignment JSON snapshot, strict validation, atomic restore, one-use settings waiting for an image, filename display | change portable settings or image names |
 | `keyboard.js` | Shortcuts (`KEY_ACTIONS`, `MOD_ACTIONS`), arrow-key rules, help overlay, status hint | add a shortcut |
 | `export.js` | `buildExportCanvas()` (image then grid, full resolution) and PNG download | change export |
 | `main.js` | `frame()` loop, top-bar wiring, `init()` | start-up order |
@@ -70,6 +71,8 @@ displayed µm/px is then that microscope's calibration.
 **Two grid modes.** `activePreset()` null → manual sliders (`S.grid`). Non-null → chip geometry. In chip mode
 `S.chip.fit` (default) makes the canvas = real N×M array + a border (`S.chip.margin` %), restoring the old canvas size
 on untick (`S.chip.savedDoc`); otherwise the grid tiles across the existing canvas.
+
+**Portable settings.** `settingsSnapshot()` returns detached data (no image pixels or view/tool/history state); `settingsToText()` pretty-prints it. `parseSettings(text)` → `{settings}` validates known fields and ignores extras; `applySettings(settings)` revalidates and checks the live chip list before any mutation, returning `{ok, warnings}` or `{ok:false, reason}`. Version 1 records image identity, canvas, chip including its live definition and `savedDoc` (the canvas to return to on untick), image transform/oriented crop, lens, warp/fine mesh, all grid settings, crop aspect and export layer choices. Chip changes run through `keepingImageScale()` first, then the exact saved canvas and image values overwrite its resizing/scaling. Loading clears both crop and auto-fit undo and synchronises all controls. An image-less load applies the layout and holds one detached settings object in `waitingSettings`; `setImage()` reapplies it after its resets and consumes it once. FileReader / Blob URLs work over `file://`. `loadWorkspaceFile()` routes dropped/pasted JSON separately from images; `S.img.name` is set at the shared image entry point and displayed with `textContent`, middle ellipsis and a full-name/size tooltip.
 
 **Two renderers, one picture.** With hardware acceleration off many browsers give no WebGL. `render.js` tries WebGL
 (`initGL()` returns false on any failure, and a lost context also triggers it) and otherwise calls `enterCpuMode()`, which swaps in a
@@ -188,7 +191,8 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
   handle keeps the mesh, so a manual tweak after an auto-fix stays a small change on top of it.
 * Auto-fit has regression coverage on two local real photos (V12 and tissue-covered V11), plus synthetic cases for every chip preset. This does not establish accuracy on every sample. Expect to tune the thresholds in `AF`
   (top of `autofit.js`) as more real photos arrive. It needs the whole array in view and ≥ ~5 px per well; lens centre is not fitted.
-* Only crop and auto-fit have undo (crop restores the previous image crop; auto-fit has its own one-step undo). No project save/load. Fisheye is one radial model, not a per-lens profile.
+* Only crop and auto-fit have undo (crop restores the previous image crop; auto-fit has its own one-step undo). Settings files restore alignment but contain no image pixels: keep the source picture separately, and load a missing custom chip list first. Fisheye is one radial model, not a per-lens profile.
+* Settings version 1 only; future versions are refused. Settings do not include the whole chip list, view zoom, active tool, unfinished crop selection or undo history. Image dimensions describe the working image after any size reduction; changed dimensions/names or chip drawing measurements produce warnings.
 * Chip draft angle, bottom shape and depth are listed but not drawn (top view only). The table's "well size" is drawn
   as given (assumed to be the top opening).
 * Table quirk: V10.2 and V12 list well counts one lower than array size ÷ pitch (66 vs 66.7; 49 vs 50).

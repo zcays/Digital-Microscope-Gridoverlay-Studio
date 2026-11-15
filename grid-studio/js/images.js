@@ -14,22 +14,23 @@ function downscaleToFit(src, max) {
 }
 
 /** Make `src` (Image or canvas) the working image and reset everything that depended on the old one. */
-function setImage(src) {
+function setImage(src, name = '') {
   src = downscaleToFit(src, maxTextureSize());
   const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
   setRendererImage(src);
-  Object.assign(S.img, {el: src, w, h, crop: null}, defaultImageTransform());
+  Object.assign(S.img, {el: src, name, w, h, crop: null}, defaultImageTransform());
   Object.assign(S.lens, defaultLens());
   S.doc = {w, h}; S.crop = null; undoStack.length = 0;
   dom.emptyHint.style.display = 'none';
   S.chip.savedDoc = null; applyChipCanvas(); if (S.chip.id) centerImage();     // a ticked chip re-fits the canvas to the new image
+  applyWaitingSettings(); updateImageName();
   fitZoom(); updateUndoButton(); refresh('gl', 'grid', 'layout', 'crop', 'status');
 }
 
-function loadFile(file) {
+function loadFile(file, name = file && file.name) {
   if (!file || !file.type.startsWith('image/')) return toast('That is not an image file');
   const url = URL.createObjectURL(file), im = new Image();
-  im.onload = () => { setImage(im); URL.revokeObjectURL(url); };
+  im.onload = () => { setImage(im, name); URL.revokeObjectURL(url); };
   im.onerror = () => toast('Could not read that image');
   im.src = url;
 }
@@ -61,4 +62,4 @@ function barrelDistort(scene, w, h, strength) {
   return out;
 }
 
-function loadSample() { setImage(barrelDistort(drawTestScene(1900, 1300), 1200, 800, 0.45)); }
+function loadSample() { setImage(barrelDistort(drawTestScene(1900, 1300), 1200, 800, 0.45), 'Sample image'); }
