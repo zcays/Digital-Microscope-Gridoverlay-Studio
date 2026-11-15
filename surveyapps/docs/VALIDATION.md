@@ -59,7 +59,7 @@ The E2E harness now checks error arrays again after teardown. Connection resets/
 
 Adds portable Grid Studio alignment settings save/load (including the ⌘/Ctrl+S shortcut and workspace JSON drop) and top-bar image filename display. Source, app version, lockfile, installation instructions and installer filenames are updated together. The prior local-only 1.0.2 settings build is superseded by this distinct release version. Keep the original image and custom chip lists separately from settings files.
 
-Local release checks: the source Grid Studio suite passed 158/158 with no page errors (including both private real-photo checks); Python unit/service tests passed 9/9. The preceding local settings integration passed all 9 packaged desktop groups with 158/158 embedded self-tests. A fresh 1.0.3 local installer build and cross-platform CI validation are in progress; results are linked from the published release with SHA256SUMS.txt.
+Local release checks: the source Grid Studio suite passed 158/158 with no page errors (including both private real-photo checks); Python unit/service tests passed 9/9. The preceding local settings integration passed all 9 packaged desktop groups with 158/158 embedded self-tests. The fresh local 1.0.3 ARM64 packaged suite passed 9/9 groups with 158/158 embedded self-tests, no unexpected page/console/HTTP500 errors and no orphan backend processes. All 33 packaged runtime files matched source, no private samples were packaged, the strict ad-hoc signature check passed, and DMG checksum / ZIP CRC checks passed. Cross-platform CI results are linked from the published release with SHA256SUMS.txt.
 
 ## Release `v1.0.2` (2026-11-15)
 
