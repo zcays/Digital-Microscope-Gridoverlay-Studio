@@ -12,7 +12,7 @@ rel_base = root if standalone_workflow.exists() else parent
 out = root/'dist'
 out.mkdir(exist_ok=True)
 version = json.loads((root/'package.json').read_text())['version']
-archive = out/f'SurveyApps-{version}-source.zip'
+archive = out/f'SUGAR-{version}-source.zip'
 files = []
 for name in ('README.md', 'INSTALL.md', 'DELIVERY.md', '.gitignore', 'package.json', 'package-lock.json', 'requirements-build.txt'):
     p = root/name

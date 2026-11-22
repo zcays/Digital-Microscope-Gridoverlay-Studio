@@ -1,9 +1,9 @@
 {
   "name": "surveyapps",
-  "productName": "SurveyApps!",
+  "productName": "SUGAR",
   "version": "1.0.3",
   "private": true,
-  "description": "Offline microscopy alignment and fluorescence analysis desktop suite",
+  "description": "SUGAR (Super Ultra Gridding Arrays Repo) — offline microscopy alignment and fluorescence analysis",
   "author": "zcays",
   "homepage": "https://github.com/zcays/SurveyApps",
   "repository": {
@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "org.surveyapps.desktop",
-    "productName": "SurveyApps!",
+    "productName": "SUGAR",
     "asar": true,
     "directories": {
       "output": "dist",
@@ -47,7 +47,7 @@
         "to": "backend"
       }
     ],
-    "artifactName": "SurveyApps-${version}-${os}-${arch}.${ext}",
+    "artifactName": "SUGAR-${version}-${os}-${arch}.${ext}",
     "mac": {
       "category": "public.app-category.education",
       "icon": "assets/icon.icns",
@@ -59,7 +59,7 @@
       ]
     },
     "dmg": {
-      "title": "SurveyApps!",
+      "title": "SUGAR",
       "contents": [
         {
           "x": 140,

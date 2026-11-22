@@ -1,4 +1,4 @@
-"""SurveyApps runtime copy of the pinned Microscopy Grid Overlay source.
+"""SUGAR runtime copy of the pinned Microscopy Grid Overlay source.
 Owns the existing Dash UI and scientific callbacks. Local changes are documented
 in docs/UPSTREAM_CHANGES.md; the exact original remains in vendor/microscopy/.
 """
@@ -16,7 +16,7 @@ import json
 import string
 
 from pathlib import Path
-app = dash.Dash(__name__, title="SurveyApps! · Fluorescence Lab",
+app = dash.Dash(__name__, title="SUGAR · Fluorescence Lab",
                 assets_folder=str(Path(__file__).parent / 'assets'),
                 serve_locally=True, update_title="Processing…")
 
@@ -105,7 +105,7 @@ def _get_mono_font(font_size):
 _btn_style = {
     'backgroundColor': 'var(--lg-control)', 'color': 'var(--lg-text)',
     'border': '1px solid var(--lg-border)', 'borderRadius': '10px',
-    'padding': '7px 12px', 'cursor': 'pointer',
+    'padding': '8px 12px', 'cursor': 'pointer',
     'fontFamily': 'inherit', 'fontSize': '12.5px', 'fontWeight': '500',
     'width': '100%', 'marginBottom': '6px'
 }
@@ -123,7 +123,7 @@ _hr_style = {
     'border': 'none', 'borderTop': '1px solid var(--lg-border)',
     'margin': '14px 0 12px'
 }
-_mark_style = {'color': 'rgba(255, 255, 255, 0.42)', 'fontSize': '10.5px'}
+_mark_style = {'color': 'var(--lg-secondary)', 'fontSize': '10.5px'}
 
 # ── Layout ─────────────────────────────────────────────────────────────
 app.layout = html.Div([
@@ -175,7 +175,7 @@ app.layout = html.Div([
             dcc.Store(id='center-point-store', data={'x': 0.0, 'y': 0.0}),
             dcc.Store(id='keypress-store'),
             html.Div(id='dummy-listener'),
-            html.Button("🎯 Place Center Point (W)", id='btn-place-center', n_clicks=0, style=_btn_style),
+            html.Button("Place Center Point (W)", id='btn-place-center', n_clicks=0, style=_btn_style),
             html.Div(id='center-point-display', children='Center Point: (0.0, 0.0)', style={
                 'color': 'var(--lg-text)', 'fontFamily': 'var(--font-mono)',
                 'fontVariantNumeric': 'tabular-nums', 'fontSize': '11.5px',
@@ -257,7 +257,7 @@ app.layout = html.Div([
         
         # ── Image Cropping ──────────────────────────────────────────
         html.Hr(style=_hr_style),
-        html.Label("Image Cropping (%)", style=_section_title_style),
+        html.Label("Image Cropping (%)", className="lab-section-title", style=_section_title_style),
         
         html.Div([
             html.Label("Top Wall", style=_label_style),
@@ -276,8 +276,8 @@ app.layout = html.Div([
             dcc.Slider(id='crop-right-slider', min=0, max=99, step=0.1, value=0, updatemode='drag', tooltip={"placement": "bottom", "always_visible": False})
         ], style={'marginBottom': '10px'}),
         
-        html.Button("✂️ Apply Crop", id='btn-apply-crop', n_clicks=0, style=_btn_style),
-        html.Button("🔄 Reset Image", id='btn-reset-crop', n_clicks=0, style=_btn_style),
+        html.Button("Apply Crop", id='btn-apply-crop', n_clicks=0, style=_btn_style),
+        html.Button("Reset Image", id='btn-reset-crop', n_clicks=0, style=_btn_style),
 
 
         html.Div([
@@ -293,7 +293,7 @@ app.layout = html.Div([
 
         # ── Fluorescence ───────────────────────────────────────────
         html.Hr(style=_hr_style),
-        html.Label("Fluorescence Analysis", style=_section_title_style),
+        html.Label("Fluorescence Analysis", className="lab-section-title", style=_section_title_style),
 
         html.Div([
             html.Label("Channel", style=_label_style),
@@ -325,7 +325,7 @@ app.layout = html.Div([
             ),
         ], style={'marginBottom': '8px'}),
 
-        html.Button("🔬  Compute Fluorescence", id='btn-compute-fluor', n_clicks=0, style=_btn_style),
+        html.Button("Compute Fluorescence", id='btn-compute-fluor', n_clicks=0, style=_btn_style),
 
         html.Div([
             dcc.Checklist(
@@ -337,11 +337,11 @@ app.layout = html.Div([
             )
         ], style={'marginBottom': '8px'}),
 
-        html.Button("📊  Export Matrix CSV", id='btn-save-csv', n_clicks=0, style=_btn_style),
+        html.Button("Export Matrix CSV", id='btn-save-csv', n_clicks=0, style=_btn_style),
 
         # ── Crop Well ──────────────────────────────────────────────
         html.Hr(style=_hr_style),
-        html.Label("Crop Well", style=_section_title_style),
+        html.Label("Crop Well", className="lab-section-title", style=_section_title_style),
 
         html.Div([
             html.Label("Select Well", style=_label_style),
@@ -354,15 +354,15 @@ app.layout = html.Div([
             ),
         ], style={'marginBottom': '8px'}),
 
-        html.Button("✂️  Crop & Download Well", id='btn-crop-well', n_clicks=0, style=_btn_style),
+        html.Button("Crop & Download Well", id='btn-crop-well', n_clicks=0, style=_btn_style),
 
         # ── Export & Settings ──────────────────────────────────────
         html.Hr(style=_hr_style),
-        html.Label("Export & Settings", style=_section_title_style),
+        html.Label("Export & Settings", className="lab-section-title", style=_section_title_style),
 
-        html.Button("💾  Save Image Only", id='btn-save-image', n_clicks=0, style=_btn_style),
-        html.Button("🔲  Save Grid Only", id='btn-save-grid', n_clicks=0, style=_btn_style),
-        html.Button("📸  Save Merged (Image + Grid)", id='btn-save-merged', n_clicks=0, style=_btn_style),
+        html.Button("Save Image Only", id='btn-save-image', n_clicks=0, style=_btn_style),
+        html.Button("Save Grid Only", id='btn-save-grid', n_clicks=0, style=_btn_style),
+        html.Button("Save Merged (Image + Grid)", id='btn-save-merged', n_clicks=0, style=_btn_style),
 
         html.Hr(style=_hr_style),
 
@@ -381,10 +381,10 @@ app.layout = html.Div([
                 }
             )
         ]),
-        html.Button("⬇️  Save Grid Settings", id='btn-save-settings', n_clicks=0, style=_btn_style),
+        html.Button("Save Grid Settings", id='btn-save-settings', n_clicks=0, style=_btn_style),
         dcc.Upload(
             id='upload-settings',
-            children=html.Button("⬆️  Load Grid Settings", style=_btn_style),
+            children=html.Button("Load Grid Settings", style=_btn_style),
             style={'width': '100%'},
             multiple=False
         ),
@@ -396,7 +396,7 @@ app.layout = html.Div([
 
         # ── Matrix Heatmap Container ────────────────────────────────
         html.Hr(style=_hr_style),
-        html.Label("Fluorescence Matrix Heatmap", style=_section_title_style),
+        html.Label("Fluorescence Matrix Heatmap", className="lab-section-title", style=_section_title_style),
         dcc.Graph(
             id='matrix-graph',
             className='lg-matrix-graph',
@@ -1462,7 +1462,7 @@ def handle_keypress(key_data, x_val, y_val, rot_val, space_val, op_val, placemen
     raise dash.exceptions.PreventUpdate
 
 
-# SurveyApps: computed values belong to one exact image/alignment/channel.
+# SUGAR: computed values belong to one exact image/alignment/channel.
 # Registered clientside so dragging sliders never triggers HTTP round-trips.
 def invalidate_fluorescence(*_):
     return None

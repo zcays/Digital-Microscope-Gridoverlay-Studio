@@ -31,7 +31,7 @@ function wireTopBar() {
   cbArray.onchange = e => setArrayOnly(e.target.checked);            // same setting as "Crop to array" in the Crop panel
   syncs.push(() => {
     const ok = !!arrayRect(), title = ok
-      ? 'Show and export exactly the array: all wells plus half a wall around them, nothing more (same as “Crop to array” in the Crop panel)'
+      ? `Show and export exactly the array: ${arrayPadDesc()}, nothing more (same as “Crop to array” in the Crop panel)`
       : 'Tick a chip version (with "Fit canvas to array") to use this';
     cbArray.checked = S.chip.arrayOnly && ok;
     cbArray.disabled = !ok;

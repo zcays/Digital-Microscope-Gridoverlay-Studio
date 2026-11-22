@@ -29,7 +29,7 @@ class Backend extends EventEmitter {
       this.stop();
       this.update({state:'error', message});
     };
-    const timer = setTimeout(() => failure('Fluorescence Lab took too long to start. Retry, or reopen SurveyApps!.'), 60000);
+    const timer = setTimeout(() => failure('Fluorescence Lab took too long to start. Retry, or reopen SUGAR.'), 60000);
     this.timer = timer;
     child.on('error', error => failure('The bundled analysis engine could not start (' + error.code + '). Reinstall the complete application and retry.'));
     child.stderr.on('data', chunk => { diagnostic = (diagnostic + chunk.toString()).slice(-5000); });

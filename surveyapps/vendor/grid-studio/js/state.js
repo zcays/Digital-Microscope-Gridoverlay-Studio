@@ -46,7 +46,9 @@ const S = {
     radius: 0, stroke: 2,                   // stroke = outline thickness in px for a 1200 px wide canvas (scaled up on bigger canvases)
   },
   chip: {id: null, fit: true, margin: 8, savedDoc: null,    // ticked chip version; null id = manual grid
-         arrayOnly: false},                 // "Crop to array": show + export only what lies inside the array's outer edge (see arrayRect() in grid.js)
+         arrayOnly: false,                  // "Crop to array": show + export only the array + its margin (see arrayRect() in grid.js)
+         arrayPad: 'halfWell',              // space kept around the array when cropping: 'halfWell' | 'halfWall' | 'none'
+         cropAfterFit: true},               // automatically turn "Crop to array" on after a successful Auto-fit
   zoom: 1,                                  // VIEW zoom (screen px per canvas px). Does not change the document.
   tool: 'move', crop: null, ratio: 0, cursor: null,
 };

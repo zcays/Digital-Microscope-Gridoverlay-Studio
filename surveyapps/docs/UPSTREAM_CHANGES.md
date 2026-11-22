@@ -1,6 +1,6 @@
 # Source preservation and integration changes
 
-`vendor/provenance.json` records both pinned commits. `vendor/grid-studio/` is an exact public copy of Grid Studio commit `5082a2c5c02556019e67f043a5d5157644834ac6`. `vendor/microscopy/` preserves the original scientific Python sources. No user photos, unrelated essay, machine configuration or git metadata are included.
+`vendor/provenance.json` records both pinned commits. `vendor/grid-studio/` matches the public files at Grid Studio commit `84271577dc4b91762cdce85c55b45f68a4e799e0`, including corner-assisted alignment, crop to array and the refreshed interface. `vendor/microscopy/` preserves the original scientific Python sources. No user photos, unrelated essay, machine configuration or git metadata are included.
 
 The runtime copy `backend/microscopy_app.py` retains upstream algorithms and callbacks. Targeted changes:
 

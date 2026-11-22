@@ -1,9 +1,8 @@
 {
   "appA": {
     "url": "https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio",
-    "commit": "5082a2c5c02556019e67f043a5d5157644834ac6",
-    "note": "Exact public Grid Studio snapshot at this commit; private samples excluded.",
-    "workingTreeChanges": []
+    "commit": "84271577dc4b91762cdce85c55b45f68a4e799e0",
+    "note": "Public Grid Studio files from this commit, synced with scripts/sync_grid_studio.py. Private samples are excluded."
   },
   "appB": {
     "url": "https://github.com/zcays/Microscopy-Grid-Overlay",

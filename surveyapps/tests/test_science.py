@@ -1,4 +1,4 @@
-"""Scientific & Frozen Backend Unit Test Suite for SurveyApps! (Fluorescence Lab).
+"""Scientific & Frozen Backend Unit Test Suite for SUGAR (Fluorescence Lab).
 Verifies:
 1. Known pixel & channel extraction outputs (mean, R, G, B, cyan, magenta, yellow,
    DAPI, FITC, TRITC, Cy5, mCherry, CFP, YFP, brightfield)

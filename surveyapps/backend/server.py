@@ -92,7 +92,7 @@ def main():
 
     @app.server.get('/health')
     def health():
-        return jsonify(status='ready', service='SurveyApps!')
+        return jsonify(status='ready', service='SUGAR')
 
     class QuietHandler(WSGIRequestHandler):
         def log_request(self, *args, **kwargs):

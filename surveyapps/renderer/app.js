@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SurveyApps! — Desktop Renderer Controller (surveyapps/renderer/app.js)
+   SUGAR — Desktop Renderer Controller (surveyapps/renderer/app.js)
    Plain static ES6+ script, zero external dependencies, no Node APIs.
    Consumes preload bridge: window.surveyapps.{getStatus, onStatus, retryBackend}
    ========================================================================== */
@@ -114,7 +114,7 @@
   }
 
   /* ------------------------------------------------------------------------
-     Logo Asset Handling (../assets/icon.svg with graceful inline SVG fallback)
+     Logo Asset Handling (../assets/icon.svg with matching PNG fallback)
      ------------------------------------------------------------------------ */
   function setupLogoFallback() {
     if (!dom.brandLogo || !dom.brandLogoWrap) return;
@@ -307,7 +307,7 @@
       }
       if (dom.microscopyOverlayMsg) {
         dom.microscopyOverlayMsg.textContent =
-          'Launch the SurveyApps! desktop application to use Fluorescence Lab, or open Grid Studio.';
+          'Launch the SUGAR desktop application to use Fluorescence Lab, or open Grid Studio.';
       }
       return;
     }
@@ -577,7 +577,7 @@
       toggleHidden(dom.fallbackBanner, false);
       applyStatus({
         state: 'error',
-        message: 'Launch the SurveyApps! desktop application to use Fluorescence Lab.',
+        message: 'Launch the SUGAR desktop application to use Fluorescence Lab.',
         gridUrl: DEFAULT_FALLBACK_GRID_URL,
         version: '1.0.0'
       });

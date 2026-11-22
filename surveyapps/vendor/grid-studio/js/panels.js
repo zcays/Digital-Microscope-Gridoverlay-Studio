@@ -131,12 +131,13 @@ function buildChipPanel() {
   const tools = document.createElement('div'); p.append(tools);       // greyed out until a chip is ticked
   checkbox(tools, 'Fit canvas to array', () => S.chip.fit, setChipFit, 'canvas = the N × M wells + border');
   slider(tools, 'Dead room %', () => S.chip.margin, setChipMargin, 0, 40, 1);
-  buttons(tools, [['afButton', 'Auto-fit image to grid', 'primary', autoFit], ['afUndo', 'Undo auto-fit', '', undoAutoFit]]);
+  buttons(tools, [['afButton', 'Auto-fit image to grid', 'primary', autoFit], ['cornerPick', 'Pick 4 corners…', '', startCornerPick], ['afUndo', 'Undo auto-fit', '', undoAutoFit]]);
+  note(tools, 'If automatic detection struggles (heavy tissue or faint edges), click Pick 4 corners… (P) and mark the outer corner of each of the 4 corner wells.');
   note(tools, 'Finds the wells in the photo and sets tilt, size, position, fisheye and distortion (handles + fine mesh) for you. Uses visible patches around tissue; covered areas are inferred. Check any hidden-corner or uncertain-edge warnings and fine-tune afterwards.', 'autoFitInfo');
   const info = document.createElement('div'); info.id = 'chipInfo'; info.className = 'info'; p.append(info);   // filled by updateChipInfo()
   note(p, 'Tick a version: the grid takes its shape, well size and pitch from the table, true to scale, and the canvas is sized to the real array plus a border. Then move / scale / rotate the image until it lines up with the wells — the µm/px readout is your image\'s calibration. Untick for the manual grid.');
 
-  const manual = $('#gridManual'), bBtn = $('#chipBuiltin'), afBtn = $('#afButton'), afUndoBtn = $('#afUndo');
+  const manual = $('#gridManual'), bBtn = $('#chipBuiltin'), afBtn = $('#afButton'), cornerPickBtn = $('#cornerPick'), afUndoBtn = $('#afUndo');
   syncs.push(() => {
     syncChipRows();
     const hasChip = !!S.chip.id;
@@ -145,6 +146,7 @@ function buildChipPanel() {
     updateChipInfo();
     if (bBtn) bBtn.disabled = isUsingBuiltinChips();
     if (afBtn) afBtn.disabled = !hasChip || !S.img.el;
+    if (cornerPickBtn) { cornerPickBtn.disabled = !hasChip || !S.img.el; cornerPickBtn.classList.toggle('on', S.tool === 'corners'); }
     if (afUndoBtn) afUndoBtn.disabled = !afUndoState;
   });
 }
@@ -188,11 +190,16 @@ function buildCropPanel() {
   $('#cRatio').onchange = e => { S.ratio = +e.target.value; const r = ratioValue(); if (S.crop && r) { fitRatio(r); dirty('crop'); } };
   buttons(p, [['cStart', 'Crop tool', '', () => setTool('crop')], ['cropApply', 'Apply crop', 'primary', applyCrop], ['cCancel', 'Cancel', '', cancelCrop], ['cReset', 'Reset crop', '', resetCrop]]);
   note(p, '', 'cropInfo');                                            // text set by updateCrop()
-  // "Crop to array": not a hand-drawn crop but a preset tied to the grid — shows and exports exactly the array's outer edge.
+  // "Crop to array": not a hand-drawn crop but a preset tied to the grid — shows and exports the array plus its chosen margin.
   const arr = document.createElement('div'); p.append(arr);
   checkbox(arr, 'Crop to array', () => S.chip.arrayOnly && !!arrayRect(), setArrayOnly, 'show + export only the array');
+  const cbArrayOnly = arr.querySelector('input');
+  line(arr, 'Space around the array', '<select id="arrayPad"><option value="halfWell">Half a well</option><option value="halfWall">Half a wall</option><option value="none">None</option></select>');
+  $('#arrayPad').onchange = e => { S.chip.arrayPad = e.target.value; refresh('gl', 'crop', 'status'); updateArrayMask(); };
+  checkbox(arr, 'Crop to array after Auto-fit', () => S.chip.cropAfterFit, v => { S.chip.cropAfterFit = v; refresh('crop'); });
+  arr.querySelectorAll('input')[1].id = 'cropAfterFit';
   note(arr, '', 'arrayCropInfo');
-  syncs.push(() => { arr.querySelector('input').disabled = !arrayRect(); });      // (the text under it is kept up to date by updateArrayMask() in grid.js)
+  syncs.push(() => { cbArrayOnly.disabled = !arrayRect(); $('#arrayPad').value = S.chip.arrayPad; });   // (info text is kept up to date by updateArrayMask() in crop.js)
   note(p, 'Crop only trims the image — the canvas and the grid never change, and the edges stay straight as drawn even if the image is rotated. Drag to draw, drag handles to resize, Enter to apply, Esc to cancel, ⌘/Ctrl+Z to undo, Reset crop to bring the whole image back.');
 }
 

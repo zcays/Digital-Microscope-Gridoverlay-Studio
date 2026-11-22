@@ -1,5 +1,5 @@
 /**
- * SurveyApps! — Rigorous Desktop & Packaged E2E Test Suite (surveyapps/tests/desktop.cjs)
+ * SUGAR — Rigorous Desktop & Packaged E2E Test Suite (surveyapps/tests/desktop.cjs)
  *
  * Supports:
  *   node tests/desktop.cjs             (dev / source Electron launch)
@@ -54,10 +54,10 @@ const isPackaged = process.argv.includes('--packaged');
 function resolvePackagedExecutable() {
   if (process.env.SURVEYAPPS_TEST_EXECUTABLE) return process.env.SURVEYAPPS_TEST_EXECUTABLE;
   const candidates = [
-    path.join(SURVEYAPPS_DIR, 'dist/mac-arm64/SurveyApps!.app/Contents/MacOS/SurveyApps!'),
-    path.join(SURVEYAPPS_DIR, 'dist/mac/SurveyApps!.app/Contents/MacOS/SurveyApps!'),
-    path.join(SURVEYAPPS_DIR, 'dist/mac-x64/SurveyApps!.app/Contents/MacOS/SurveyApps!'),
-    path.join(SURVEYAPPS_DIR, 'dist/win-unpacked/SurveyApps!.exe'),
+    path.join(SURVEYAPPS_DIR, 'dist/mac-arm64/SUGAR.app/Contents/MacOS/SUGAR'),
+    path.join(SURVEYAPPS_DIR, 'dist/mac/SUGAR.app/Contents/MacOS/SUGAR'),
+    path.join(SURVEYAPPS_DIR, 'dist/mac-x64/SUGAR.app/Contents/MacOS/SUGAR'),
+    path.join(SURVEYAPPS_DIR, 'dist/win-unpacked/SUGAR.exe'),
     path.join(SURVEYAPPS_DIR, 'dist/linux-unpacked/surveyapps'),
   ];
   for (const candidate of candidates) {
@@ -204,9 +204,9 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
         env: buildCleanEnv(),
       };
 
-  console.log(`[SurveyApps E2E] Launching in ${modeLabel.toUpperCase()} mode...`);
+  console.log(`[SUGAR E2E] Launching in ${modeLabel.toUpperCase()} mode...`);
   if (isPackaged) {
-    console.log(`[SurveyApps E2E] Packaged executable: ${launchOpts.executablePath}`);
+    console.log(`[SUGAR E2E] Packaged executable: ${launchOpts.executablePath}`);
   }
 
   const report = {
@@ -242,7 +242,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
           timeout: 4000,
         }
       );
-      console.error('[SurveyApps E2E] Launch probe diagnostic:', JSON.stringify({
+      console.error('[SUGAR E2E] Launch probe diagnostic:', JSON.stringify({
         status: probe.status,
         signal: probe.signal,
         error: probe.error ? String(probe.error) : null,
@@ -314,6 +314,8 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     // -------------------------------------------------------------------------
     // 2. Verify refined dashboard product copy & responsive screenshots
     // -------------------------------------------------------------------------
+    assert.equal(await page.title(), 'SUGAR (Super Ultra Gridding Arrays Repo)');
+    assert.equal(await page.locator('.brand-name').innerText(), 'SUGAR');
     const homeText = await page.locator('#view-home').innerText();
     assert.ok(!homeText.includes('surveyapps://'), 'Home copy must not expose internal surveyapps:// URLs');
     assert.ok(!homeText.includes('127.0.0.1'), 'Home copy must not expose loopback IP URLs');
@@ -458,7 +460,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
 
     // Working-tree integration: scripts and storage under the custom origin.
     const chipIntegration = await gsPageFrame().evaluate(async () => {
-      const scripts = await Promise.all(['chips.js', 'js/chiplist.js', 'js/autofit-app.js', 'js/settings.js'].map(async name => {
+      const scripts = await Promise.all(['chips.js', 'js/chiplist.js', 'js/autofit-app.js', 'js/settings.js', 'js/corners.js'].map(async name => {
         const response = await fetch(name);
         return response.ok && response.headers.get('content-type').includes('javascript');
       }));
@@ -472,6 +474,9 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
         count: eval('CHIPS.length'),
         arrayExport: typeof buildExportCanvas,
         settingsApi: typeof settingsSnapshot === 'function' && typeof applySettings === 'function',
+        cornerApi: typeof startCornerPick === 'function' && typeof canvasToSourcePoint === 'function' && typeof afRunCorners === 'function' && typeof autoFitFromCorners === 'function' && !!eval('TOOLS.corners'),
+        cornerUi: !!document.querySelector('[data-tool=corners]') && !!document.querySelector('#cornerPick'),
+        arrayCropUi: !!document.querySelector('#arrayPad') && !!document.querySelector('#cropAfterFit') && eval('S.chip.arrayPad') === 'halfWell' && eval('S.chip.cropAfterFit') === true,
       };
     });
     assert.ok(chipIntegration.scripts.every(Boolean), 'New scripts served as JavaScript');
@@ -479,6 +484,9 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     assert.ok(chipIntegration.count > 0);
     assert.equal(chipIntegration.arrayExport, 'function');
     assert.equal(chipIntegration.settingsApi, true, 'settings.js functions must be loaded');
+    assert.equal(chipIntegration.cornerApi, true, 'Pick 4 corners tool and corner-assisted Auto-fit must be loaded');
+    assert.equal(chipIntegration.cornerUi, true, 'Pick 4 corners buttons must be present');
+    assert.equal(chipIntegration.arrayCropUi, true, 'Crop to array margin controls must be present with half-a-well default');
 
     const chipJSON = await gsPageFrame().evaluate(() => JSON.stringify(eval('CHIPS')));
     await gridFrame.locator('#p-chip input[type=file]').setInputFiles({name:'integration-chips.json', mimeType:'application/json', buffer:Buffer.from(chipJSON)});
@@ -1260,8 +1268,8 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
   assert.equal(report.unexpectedHttp500s.length,0,JSON.stringify(report.unexpectedHttp500s));
   const outFile = path.join(RESULTS_DIR, `desktop-${modeLabel}.json`);
   fs.writeFileSync(outFile, JSON.stringify(report, null, 2));
-  console.log(`[SurveyApps E2E] ${modeLabel.toUpperCase()} SUITE PASSED (${report.checks.length} checks). Saved ${outFile}`);
+  console.log(`[SUGAR E2E] ${modeLabel.toUpperCase()} SUITE PASSED (${report.checks.length} checks). Saved ${outFile}`);
 })().catch(err => {
-  console.error('[SurveyApps E2E] FAILED:', err);
+  console.error('[SUGAR E2E] FAILED:', err);
   process.exitCode = 1;
 });

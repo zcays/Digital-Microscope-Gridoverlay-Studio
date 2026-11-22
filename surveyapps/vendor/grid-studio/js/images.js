@@ -21,6 +21,7 @@ function setImage(src, name = '') {
   Object.assign(S.img, {el: src, name, w, h, crop: null}, defaultImageTransform());
   Object.assign(S.lens, defaultLens());
   S.doc = {w, h}; S.crop = null; undoStack.length = 0;
+  if (typeof clearCorners === 'function') clearCorners();
   dom.emptyHint.style.display = 'none';
   S.chip.savedDoc = null; applyChipCanvas(); if (S.chip.id) centerImage();     // a ticked chip re-fits the canvas to the new image
   applyWaitingSettings(); updateImageName();

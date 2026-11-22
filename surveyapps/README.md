@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/icon.svg" alt="SurveyApps! icon" width="112" height="112">
+  <img src="assets/icon.svg" alt="SUGAR icon" width="112" height="112">
 </p>
 
-<h1 align="center">SurveyApps!</h1>
+<h1 align="center">SUGAR (Super Ultra Gridding Arrays Repo)</h1>
 
 <p align="center">
   <strong>Unified offline desktop suite for microfluidic chip grid calibration and well fluorescence analysis</strong>
@@ -14,7 +14,7 @@
 
 ---
 
-**SurveyApps!** packages two open-source microscopy tools into a single standalone desktop application:
+**SUGAR** packages two open-source microscopy tools into a single standalone desktop application:
 
 1. **Grid Studio** — from [Digital-Microscope-Gridoverlay-Studio](https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio)
    Calibrated chip grid overlays, lens fisheye correction, corner/edge distortion warp, cropping, computer-vision **Auto-fit**, portable alignment settings JSON save/load, and full-resolution PNG export.
@@ -29,7 +29,7 @@ Both tools run completely offline on your computer with a bundled Electron runti
 
 | Dashboard | Grid Studio |
 |---|---|
-| ![SurveyApps! Dashboard](docs/images/dashboard.png) | ![Grid Studio Workspace](docs/images/grid-studio.png) |
+| ![SUGAR Dashboard](docs/images/dashboard.png) | ![Grid Studio Workspace](docs/images/grid-studio.png) |
 
 | Fluorescence Lab |
 |---|
@@ -39,7 +39,7 @@ Both tools run completely offline on your computer with a bundled Electron runti
 
 ## Quick Download & Install
 
-Pre-built downloads are published on the **[GitHub Releases](https://github.com/zcays/SurveyApps/releases)** page (and produced by the [Build SurveyApps workflow](.github/workflows/build-surveyapps.yml)).
+The published 1.0.3 installers use the former name **SurveyApps!**. Downloads are available on the **[GitHub Releases](https://github.com/zcays/SurveyApps/releases)** page (and produced by the [Build SUGAR workflow](.github/workflows/build-surveyapps.yml)).
 
 | Platform | Recommended Download | Portable Alternative | Requirements |
 |---|---|---|---|
@@ -68,6 +68,8 @@ Pre-built downloads are published on the **[GitHub Releases](https://github.com/
 - **Chip presets:** `V1-Square`, `V3.1`, `V3.2`, `V7.0`, `V9.0–V9.2`, `V10.2`, `V11`, `V12`, `V15.1`, `V15.2` with live `µm/px` calibration readout and automatic `N × M` array canvas sizing, or switch to manual grid dimensions.
 - **Static grid, adjustable image:** Move (`V`), scale, rotate, arrow-key nudge, apply radial fisheye correction (`k₁`, `k₂`, lens center, `\` before/after toggle), distort corners/edges (`D`), and crop (`C`) without moving the reference grid.
 - **Computer-vision Auto-fit (`A`):** Aligns visible regular well arrays automatically and refuses rather than guesses when residual error is too high.
+- **Pick 4 corners (`P`):** half human, half automatic — click the outer corner of each corner well (any order, with a magnifier), press Enter, and Auto-fit corrects tilt, perspective, fisheye and distortion from there. Useful when tissue hides the array's edges.
+- **Crop to array:** after a successful Auto-fit the picture is trimmed to the array plus half a well of space, and every export (image + grid, image only, grid only) contains just that. The margin and the automatic switch are in the Crop panel.
 - **GPU & CPU fallback:** Uses WebGL hardware rendering when available and automatically falls back to a matching Canvas 2D software renderer otherwise.
 - **Portable alignment settings (`Ctrl/⌘+S`):** Save and reload chip selection, alignment, fisheye, distortion, crop, grid, and export settings via **Save settings…** / **Load settings…** or by dropping a `.json` file onto the workspace (`<image>.gridstudio.json` or `grid-studio-settings.json`, without embedding image pixels).
 - **Export (`Ctrl/⌘+E`):** Full-resolution PNG of the corrected image, reference grid, or combined composite via native Save dialog.
@@ -87,6 +89,7 @@ Pre-built downloads are published on the **[GitHub Releases](https://github.com/
 | `Ctrl/⌘ + B` | Collapse or expand sidebar |
 | `V` / `D` / `C` | Grid Studio: Move / Distort / Crop tool |
 | `A` | Grid Studio: Auto-fit image to selected chip grid |
+| `P` | Grid Studio: Pick 4 corners for Auto-fit (Enter fits, Esc cancels) |
 | `← → ↑ ↓` | Grid Studio: Nudge image `1 px` (`Shift` = `10 px`, `Alt` = `0.1 px`) |
 | `G` / `\` | Grid Studio: Toggle grid / Before-after fisheye toggle |
 | `Ctrl/⌘ + O` / `S` / `E` | Grid Studio: Open image / Save settings… / Export PNG |
@@ -132,7 +135,7 @@ npm start
   ```bash
   CSC_IDENTITY_AUTO_DISCOVERY=false npm run build:mac
   ```
-  Outputs `dist/SurveyApps-1.0.3-mac-arm64.dmg` and `dist/SurveyApps-1.0.3-mac-arm64.zip`.
+  Outputs `dist/SUGAR-1.0.3-mac-arm64.dmg` and `dist/SUGAR-1.0.3-mac-arm64.zip`.
 
 - **macOS (Intel x64 on Apple Silicon via Rosetta + x64 Python):**
   ```bash
@@ -146,7 +149,7 @@ npm start
   python scripts/build_backend.py
   npm run build:win
   ```
-  Outputs `dist/SurveyApps-1.0.3-win-x64.exe` (NSIS installer) and `dist/SurveyApps-1.0.3-win-x64.zip` (portable archive).
+  Outputs `dist/SUGAR-1.0.3-win-x64.exe` (NSIS installer) and `dist/SUGAR-1.0.3-win-x64.zip` (portable archive).
 
 ### Automated Tests
 
@@ -197,7 +200,7 @@ SurveyApps/
 
 ## Provenance & Licensing
 
-SurveyApps! integrates pinned snapshots of:
+SUGAR integrates pinned snapshots of:
 - [`zcays/Digital-Microscope-Gridoverlay-Studio`](https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio)
 - [`zcays/Microscopy-Grid-Overlay`](https://github.com/zcays/Microscopy-Grid-Overlay)
 

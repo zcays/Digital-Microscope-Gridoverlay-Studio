@@ -1,25 +1,26 @@
-/* SurveyApps Fluorescence Lab — Apple Liquid Glass UI */
+/* SUGAR Fluorescence Lab — layered dark instrument UI, cyan actions.
+ * Chrome only: never filter or animate scientific images or grid overlays. */
 
 :root {
-  --lg-bg: #121212;
-  --lg-glass: rgba(28, 30, 36, 0.68);
-  --lg-glass-elevated: rgba(38, 41, 50, 0.72);
-  --lg-solid: #262626;
-  --lg-border: rgba(255, 255, 255, 0.12);
-  --lg-border-strong: rgba(255, 255, 255, 0.18);
-  --lg-highlight: rgba(255, 255, 255, 0.15);
-  --lg-text: rgba(255, 255, 255, 0.92);
-  --lg-secondary: rgba(255, 255, 255, 0.62);
-  --lg-tertiary: rgba(255, 255, 255, 0.38);
-  --lg-accent: #eeeeee;
-  --lg-hover: #ffffff;
-  --lg-green: #30D158;
+  --lg-bg: #0c1014;
+  --lg-glass: #171e26;
+  --lg-glass-elevated: #1c2733;
+  --lg-solid: #171e26;
+  --lg-border: #2b3643;
+  --lg-border-strong: #405166;
+  --lg-highlight: rgba(255,255,255,.04);
+  --lg-text: #eef4f8;
+  --lg-secondary: #a8b7c7;
+  --lg-tertiary: #91a0b1;
+  --lg-accent: #58d8f5;
+  --lg-hover: #87e5fa;
+  --lg-green: #63db8c;
   --lg-orange: #FF9F0A;
   --lg-red: #FF453A;
-  --lg-field: rgba(0, 0, 0, 0.22);
-  --lg-control: rgba(255, 255, 255, 0.06);
-  --lg-control-hover: rgba(255, 255, 255, 0.11);
-  --lg-selected: rgba(255, 255, 255, 0.19);
+  --lg-field: #0f151c;
+  --lg-control: #202a35;
+  --lg-control-hover: #2b3948;
+  --lg-selected: #173a48;
   --lg-shadow: 0 8px 28px rgba(0, 0, 0, 0.24), inset 0 1px 0 var(--lg-highlight);
   --lg-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
 
@@ -27,13 +28,13 @@
   --Dash-Spacing: 4px;
   --Dash-Stroke-Strong: rgba(255, 255, 255, 0.16);
   --Dash-Stroke-Weak: rgba(255, 255, 255, 0.10);
-  --Dash-Fill-Interactive-Strong: #eeeeee;
-  --Dash-Fill-Interactive-Weak: rgba(255, 255, 255, 0.18);
+  --Dash-Fill-Interactive-Strong: var(--lg-accent);
+  --Dash-Fill-Interactive-Weak: var(--lg-selected);
   --Dash-Fill-Inverse-Strong: #1c1f27;
   --Dash-Fill-Inverse-strong: transparent;
   --Dash-Text-Primary: rgba(255, 255, 255, 0.92);
   --Dash-Text-Strong: rgba(255, 255, 255, 0.86);
-  --Dash-Text-Weak: rgba(255, 255, 255, 0.56);
+  --Dash-Text-Weak: var(--lg-secondary);
   --Dash-Text-Disabled: rgba(255, 255, 255, 0.34);
   --Dash-Fill-Primary-Hover: rgba(255, 255, 255, 0.09);
   --Dash-Fill-Primary-Active: rgba(255, 255, 255, 0.22);
@@ -82,19 +83,14 @@ html, body {
 }
 
 /* App Shell & Panels */
-.survey-lab-root {
-  background:
-    radial-gradient(circle at 8% 12%, rgba(255, 255, 255, 0.09), transparent 36%),
-    radial-gradient(circle at 90% 85%, rgba(48, 209, 88, 0.05), transparent 40%),
-    var(--lg-bg) !important;
-}
+.survey-lab-root { background: var(--lg-bg) !important; }
 
 .survey-controls {
   background: var(--lg-glass) !important;
-  backdrop-filter: blur(24px) saturate(170%);
-  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid var(--lg-border) !important;
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   box-shadow: var(--lg-shadow);
 }
 
@@ -160,7 +156,7 @@ button {
   color: var(--lg-text) !important;
   border: 1px solid var(--lg-border) !important;
   border-radius: 9px !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  box-shadow: none;
 }
 
 .survey-controls button:hover {
@@ -175,9 +171,9 @@ button {
 /* Primary Compute Button */
 #btn-compute-fluor {
   background: var(--lg-accent) !important;
-  color: #171717 !important;
+  color: #07212a !important;
   border: 1px solid rgba(255, 255, 255, 0.22) !important;
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.26) !important;
+  box-shadow: 0 2px 6px #0003 !important;
   font-weight: 600 !important;
 }
 
@@ -187,14 +183,14 @@ button {
 }
 
 /* Secondary Export Action */
-#btn-download-csv {
-  background: rgba(255, 255, 255, 0.16) !important;
-  color: #70b7ff !important;
+#btn-save-csv {
+  background: var(--lg-selected) !important;
+  color: var(--lg-accent) !important;
   border: 1px solid rgba(255, 255, 255, 0.34) !important;
 }
 
-#btn-download-csv:hover {
-  background: rgba(255, 255, 255, 0.25) !important;
+#btn-save-csv:hover {
+  background: rgba(88,216,245,.18) !important;
   color: #ffffff !important;
 }
 
@@ -236,7 +232,7 @@ input[type="text"]:focus,
 .lg-input:focus,
 .dash-input-container input:focus {
   border-color: var(--lg-accent) !important;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 0 0 3px rgba(88,216,245,.18) !important;
   outline: none !important;
 }
 
@@ -259,7 +255,7 @@ input[type="text"]:focus,
 .dash-dropdown:focus-within,
 .dash-dropdown[data-state="open"] {
   border-color: var(--lg-accent) !important;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 0 0 3px rgba(88,216,245,.18) !important;
 }
 
 button.dash-dropdown-trigger {
@@ -296,8 +292,8 @@ button.dash-dropdown-trigger:hover {
 
 .dash-dropdown-content {
   background: rgba(28, 31, 40, 0.92) !important;
-  backdrop-filter: blur(24px) saturate(175%);
-  -webkit-backdrop-filter: blur(24px) saturate(175%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid var(--lg-border-strong) !important;
   border-radius: 11px !important;
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--lg-highlight) !important;
@@ -382,7 +378,7 @@ button.dash-dropdown-trigger:hover {
 .dash-slider-thumb:focus {
   background-color: #ffffff !important;
   transform: scale(1.08);
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 0 0 4px rgba(88,216,245,.18), 0 2px 6px rgba(0, 0, 0, 0.45) !important;
 }
 
 .dash-slider-mark,
@@ -438,10 +434,10 @@ input.dash-range-slider-input {
 /* Plotly Graphs & Modebar */
 .js-plotly-plot .plotly .modebar {
   background: rgba(28, 30, 36, 0.72) !important;
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 1px solid var(--lg-border);
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 2px 8px;
   top: 8px !important;
   right: 10px !important;
@@ -492,6 +488,29 @@ input.dash-range-slider-input {
   cursor: pointer !important;
 }
 
+/* Instrument hierarchy and clean type. These rules only touch chrome. */
+.survey-controls { flex-shrink: 0; padding: 18px !important; }
+.lab-heading { font-size: 21px !important; letter-spacing: -.5px !important; padding-bottom: 14px; border-bottom: 1px solid var(--lg-border); }
+.survey-note { padding: 10px 12px; margin-bottom: 18px; font-size: 11px; line-height: 1.6; border-left: 2px solid #3b7184 !important; border-radius: 6px !important; background: #111820 !important; }
+.lab-section-title { display: flex !important; align-items: center; gap: 8px; padding: 4px 0 8px; font-size: 13px !important; }
+.lab-section-title::before { content: ""; width: 3px; height: 13px; border-radius: 2px; background: var(--lg-accent); }
+#upload-image { border-color: #3b7184 !important; border-radius: 8px !important; background: #11232d !important; }
+#upload-image:hover { background: #173a48 !important; border-color: var(--lg-accent) !important; }
+.survey-controls button { min-height: 34px; border-radius: 7px !important; }
+.survey-controls button:disabled { opacity: .45; cursor: default; }
+#btn-compute-fluor { margin-top: 4px; min-height: 38px; }
+.dash-slider-thumb { background: var(--lg-accent) !important; }
+.dash-dropdown-option[aria-selected="true"] { color: var(--lg-accent) !important; }
+.dash-checklist .dash-options-list-option-checkbox { border-color: #718499 !important; }
+.dash-checklist .dash-options-list-option.checked .dash-options-list-option-checkbox { color: #07212a !important; }
+#status-text:not(:empty) { padding: 10px 12px; border: 1px solid #335341; background: #15261e; border-radius: 7px; line-height: 1.6; }
+.survey-image.is-empty { position: relative; }
+.survey-image.is-empty::before { content: "↑"; position: absolute; z-index: 2; left: 50%; top: calc(50% - 60px); transform: translate(-50%,-50%); display: grid; place-items: center; width: 50px; height: 50px; border: 1px solid #2c6171; border-radius: 12px; background: var(--lg-selected); color: var(--lg-accent); font-size: 28px; font-weight: 400; pointer-events: none; }
+.survey-image.is-empty::after { content: "TIFF · PNG · JPEG"; position: absolute; top: calc(50% + 46px); left: 0; right: 0; text-align: center; font-size: 11px; letter-spacing: .15em; color: var(--lg-secondary); pointer-events: none; }
+/* Empty Plotly background only; loaded image and grid are untouched. */
+.survey-image.is-empty svg.main-svg:first-of-type { background: #0f151c !important; }
+.survey-image.is-empty .bg { fill: #0f151c !important; }
+
 /* Fallbacks & Reduced Transparency / Motion */
 @supports not (backdrop-filter: blur(1px)) {
   .survey-controls,
@@ -505,8 +524,8 @@ input.dash-range-slider-input {
   .survey-controls,
   .dash-dropdown-content,
   .js-plotly-plot .plotly .modebar {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     background: var(--lg-solid) !important;
   }
 }
@@ -523,4 +542,11 @@ input.dash-range-slider-input {
     width: 340px !important;
     min-width: 300px !important;
   }
+}
+
+@media (forced-colors: active) {
+  button, input, .dash-dropdown { border: 1px solid ButtonText !important; }
+  #btn-compute-fluor { background: Highlight !important; color: HighlightText !important; }
+  :focus-visible { outline: 2px solid Highlight !important; }
+  .dash-checklist input[type="checkbox"] { appearance: auto; }
 }

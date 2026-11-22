@@ -1,7 +1,9 @@
-# Installing SurveyApps!
+# Installing SUGAR (Super Ultra Gridding Arrays Repo)
 
-SurveyApps! is a standalone desktop application for **macOS (14.0+)** and **Windows (10/11 64-bit)**.  
+SUGAR is a standalone desktop application for **macOS (14.0+)** and **Windows (10/11 64-bit)**.
 End users do **not** need to install Python, Node.js, or any command-line tools.
+
+Local builds use the name **SUGAR** (on macOS, `SUGAR.app`). The steps below describe the published 1.0.3 installers, which use the original name **SurveyApps!**.
 
 Download the installer for your operating system from the **[GitHub Releases](https://github.com/zcays/SurveyApps/releases)** page.
 

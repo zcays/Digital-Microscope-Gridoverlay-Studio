@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-src 'self' http://127.0.0.1:* http://localhost:* file:;">
-  <title>SurveyApps! — Scientific Microscopy &amp; Microfluidic Grid Suite</title>
+  <title>SUGAR (Super Ultra Gridding Arrays Repo)</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app-shell" class="app-shell" data-view="home" data-sidebar="expanded">
-    <!-- Subtle Ambient Colour-Field Background Behind Glass (Dashboard & Help) -->
+    <!-- Legacy decorative hooks (kept for compatibility; no background compositing) -->
     <div class="ambient-canvas" aria-hidden="true">
       <div class="ambient-blob blob-blue"></div>
       <div class="ambient-blob blob-cyan"></div>
@@ -19,7 +19,7 @@
     <!-- Accessible Skip Link -->
     <a class="skip-link" href="#main-workspace">Skip to main workspace</a>
 
-    <!-- Main Workspace Area with Floating Liquid Glass Top Navigation Bar -->
+    <!-- Main Workspace Area with Dark Top Navigation Bar -->
     <div class="workspace-column">
       <header class="workspace-topbar" aria-label="Workspace Header">
         <!-- Left: Brand Identity & Context -->
@@ -32,15 +32,10 @@
                 src="../assets/icon.svg"
                 alt=""
               >
-              <svg class="brand-logo-fallback" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-                <rect x="2" y="2" width="32" height="32" rx="9" fill="#141821" stroke="#0A84FF" stroke-width="1.75"/>
-                <path d="M9 13h18M9 18h18M9 23h18M13 9v18M18 9v18M23 9v18" stroke="#0A84FF" stroke-width="1.25" stroke-opacity="0.65"/>
-                <circle cx="18" cy="18" r="6.5" stroke="#64D2FF" stroke-width="1.6" fill="#0A84FF" fill-opacity="0.18"/>
-                <circle cx="18" cy="18" r="2.2" fill="#64D2FF"/>
-              </svg>
+              <img class="brand-logo-fallback" src="../assets/icon.png" alt="">
             </div>
             <div class="brand-text">
-              <span class="brand-name">SurveyApps!</span>
+              <span class="brand-name" title="SUGAR (Super Ultra Gridding Arrays Repo)">SUGAR</span>
               <span class="brand-subtitle"><span id="app-version" class="version-pill" title="Application version">1.0.3</span></span>
             </div>
           </div>
@@ -180,7 +175,7 @@
           <div>
             <strong>Standalone Preview Mode:</strong>
             <span>
-              Launch the <strong>SurveyApps!</strong> desktop app to use <strong>Fluorescence Lab</strong>.
+              Launch the <strong>SUGAR</strong> desktop app to use <strong>Fluorescence Lab</strong>.
               <strong>Grid Studio</strong> remains available in this window.
             </span>
           </div>
@@ -240,16 +235,16 @@
                       <stop offset="100%" stop-color="#10131a" stop-opacity="0.94"/>
                     </linearGradient>
                     <radialGradient id="fluorGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stop-color="#0A84FF" stop-opacity="0.38"/>
-                      <stop offset="60%" stop-color="#64D2FF" stop-opacity="0.12"/>
-                      <stop offset="100%" stop-color="#0A84FF" stop-opacity="0"/>
+                      <stop offset="0%" stop-color="#58D8F5" stop-opacity="0.38"/>
+                      <stop offset="60%" stop-color="#58D8F5" stop-opacity="0.12"/>
+                      <stop offset="100%" stop-color="#58D8F5" stop-opacity="0"/>
                     </radialGradient>
                   </defs>
                   <rect x="4" y="4" width="312" height="212" rx="16" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
                   <circle cx="195" cy="110" r="82" fill="url(#fluorGlow)"/>
 
                   <!-- Left: Distorted raw lattice vs corrected grid -->
-                  <g opacity="0.48" stroke="#64D2FF" stroke-width="1" stroke-dasharray="3 3">
+                  <g opacity="0.48" stroke="#58D8F5" stroke-width="1" stroke-dasharray="3 3">
                     <path d="M26 42 Q80 54 134 42"/>
                     <path d="M22 86 Q80 92 138 86"/>
                     <path d="M22 134 Q80 128 138 134"/>
@@ -263,20 +258,20 @@
                   <g transform="translate(116, 32)">
                     <rect x="0" y="0" width="172" height="156" rx="10" fill="#0d1017" fill-opacity="0.82" stroke="rgba(255,255,255,0.22)" stroke-width="1.2"/>
                     <!-- 4x3 microfluidic wells -->
-                    <rect x="14" y="14" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.22" stroke="#0A84FF" stroke-width="1.1"/>
-                    <rect x="52" y="14" width="30" height="30" rx="5" fill="#30D158" fill-opacity="0.58" stroke="#30D158" stroke-width="1.1"/>
-                    <rect x="90" y="14" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.38" stroke="#64D2FF" stroke-width="1.1"/>
-                    <rect x="128" y="14" width="30" height="30" rx="5" fill="#30D158" fill-opacity="0.78" stroke="#63E682" stroke-width="1.1"/>
+                    <rect x="14" y="14" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.22" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="52" y="14" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.58" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="90" y="14" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.38" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="128" y="14" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.78" stroke="#87E5FA" stroke-width="1.1"/>
 
-                    <rect x="14" y="52" width="30" height="30" rx="5" fill="#30D158" fill-opacity="0.46" stroke="#30D158" stroke-width="1.1"/>
-                    <rect x="52" y="52" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.18" stroke="#0A84FF" stroke-width="1.1"/>
-                    <rect x="90" y="52" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.85" stroke="#64D2FF" stroke-width="1.3"/>
-                    <rect x="128" y="52" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.32" stroke="#64D2FF" stroke-width="1.1"/>
+                    <rect x="14" y="52" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.46" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="52" y="52" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.18" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="90" y="52" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.85" stroke="#58D8F5" stroke-width="1.3"/>
+                    <rect x="128" y="52" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.32" stroke="#58D8F5" stroke-width="1.1"/>
 
-                    <rect x="14" y="90" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.16" stroke="#0A84FF" stroke-width="1.1"/>
-                    <rect x="52" y="90" width="30" height="30" rx="5" fill="#30D158" fill-opacity="0.68" stroke="#30D158" stroke-width="1.1"/>
-                    <rect x="90" y="90" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.46" stroke="#64D2FF" stroke-width="1.1"/>
-                    <rect x="128" y="90" width="30" height="30" rx="5" fill="#0A84FF" fill-opacity="0.62" stroke="#64D2FF" stroke-width="1.1"/>
+                    <rect x="14" y="90" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.16" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="52" y="90" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.68" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="90" y="90" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.46" stroke="#58D8F5" stroke-width="1.1"/>
+                    <rect x="128" y="90" width="30" height="30" rx="5" fill="#58D8F5" fill-opacity="0.62" stroke="#58D8F5" stroke-width="1.1"/>
 
                     <!-- Scale bar annotation inside illustration (fits cleanly inside 172px box) -->
                     <line x1="14" y1="138" x2="54" y2="138" stroke="rgba(255,255,255,0.85)" stroke-width="1.8"/>
@@ -286,8 +281,8 @@
                   </g>
 
                   <!-- Alignment vector arrows -->
-                  <path d="M58 110H108" stroke="#0A84FF" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M102 105L109 110L102 115" stroke="#0A84FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M58 110H108" stroke="#58D8F5" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M102 105L109 110L102 115" stroke="#58D8F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </div>
             </div>
@@ -512,9 +507,9 @@
             <header class="help-header">
               <div>
                 <span class="eyebrow-tag">DOCUMENTATION &amp; METHODS</span>
-                <h2 id="help-heading">SurveyApps! Reference Guide</h2>
+                <h2 id="help-heading">SUGAR Reference Guide</h2>
                 <p>
-                  Practical workflows, mathematical conventions, keyboard shortcuts, and privacy guarantees for both scientific tools.
+                  SUGAR (Super Ultra Gridding Arrays Repo) includes Grid Studio and Fluorescence Lab. This guide covers workflows, keyboard shortcuts, and privacy for both tools.
                 </p>
               </div>
               <div class="help-quick-links">
@@ -547,6 +542,14 @@
                   <li>
                     <strong>Computer-Vision Auto-Fit (Key <code>A</code>):</strong>
                     Computes 2D FFT power spectra of image gradients <code>|gx|</code> and <code>|gy|</code> to find the fundamental well lattice frequency, performs complex phase demodulation and quality-guided flood-fill unwrapping, locates array boundaries, and solves for tilt, scale, translation, radial <code>k₁</code>, and corner warp. Auto-fit refuses rather than guesses if median residual error exceeds 10% of a period or fewer than 75% of samples match.
+                  </li>
+                  <li>
+                    <strong>Pick 4 Corners (Key <code>P</code>):</strong>
+                    Half human, half automatic Auto-fit: click the outer corner of each of the four corner wells (any order; a magnifier follows the cursor), drag a marker to adjust and press <kbd>Enter</kbd>. Your corners fix where the array is; the wells are then measured to correct tilt, perspective, fisheye and distortion. If the wells cannot be measured, the photo is lined up from your corners alone and the message says so.
+                  </li>
+                  <li>
+                    <strong>Crop to Array:</strong>
+                    After a successful Auto-fit the picture is trimmed to the array plus half a well of space, and every export (image + grid, image only, grid only) contains just that. Choose the space (half a well, half a wall, none) or turn the automatic crop off in the Crop panel; Undo auto-fit switches it back.
                   </li>
                   <li>
                     <strong>GPU &amp; Software Renderers:</strong>
@@ -594,7 +597,7 @@
                 <h3>3. Keyboard Shortcuts</h3>
                 <div class="shortcut-columns">
                   <div>
-                    <h4>SurveyApps! Shell Navigation</h4>
+                    <h4>SUGAR Shell Navigation</h4>
                     <table class="shortcut-table">
                       <tbody>
                         <tr><td><kbd>Alt</kbd> + <kbd>1</kbd></td><td>Dashboard Home</td></tr>
@@ -611,6 +614,7 @@
                       <tbody>
                         <tr><td><kbd>V</kbd> / <kbd>D</kbd> / <kbd>C</kbd></td><td>Move / Distort / Crop tool</td></tr>
                         <tr><td><kbd>A</kbd></td><td>Auto-fit image to ticked chip grid</td></tr>
+                        <tr><td><kbd>P</kbd></td><td>Pick 4 corners for Auto-fit (Enter fits, Backspace removes last, Esc cancels)</td></tr>
                         <tr><td><kbd>← → ↑ ↓</kbd></td><td>Nudge image 1 px (<kbd>Shift</kbd> ×10, <kbd>Alt</kbd> ×0.1)</td></tr>
                         <tr><td><kbd>G</kbd> / <kbd>\</kbd></td><td>Toggle grid / Toggle original vs corrected</td></tr>
                         <tr><td><kbd>R</kbd> / <kbd>M</kbd></td><td>Reset image / Centre image</td></tr>
@@ -628,7 +632,7 @@
                 <ul class="help-list">
                   <li>
                     <strong>100% Offline Execution:</strong>
-                    SurveyApps! bundles all required front-end assets and the standalone Python scientific runtime locally. No internet connection is required, and no external CDN scripts, web fonts, or telemetry beacons are loaded.
+                    SUGAR bundles all required front-end assets and the standalone Python scientific runtime locally. No internet connection is required, and no external CDN scripts, web fonts, or telemetry beacons are loaded.
                   </li>
                   <li>
                     <strong>Zero External Data Transmission:</strong>

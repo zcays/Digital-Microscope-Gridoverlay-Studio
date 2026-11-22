@@ -1,6 +1,6 @@
-# SurveyApps! desktop architecture
+# SUGAR desktop architecture
 
-Electron hosts an isolated local dashboard and both scientific tools. Grid Studio is a working-tree snapshot at the pinned revision, including all five pre-existing user edits. Microscopy retains Dash/Plotly/Pillow/NumPy scientific algorithms. A PyInstaller standalone backend serves Dash on an OS-assigned loopback port, authenticated per launch. Electron owns startup, health, errors, resource paths and cleanup. No development runtimes required by downloads.
+Electron hosts an isolated local dashboard and both scientific tools. The bundled Grid Studio files match the upstream revision in `vendor/provenance.json`. Microscopy retains Dash/Plotly/Pillow/NumPy scientific algorithms. A PyInstaller standalone backend serves Dash on an OS-assigned loopback port, authenticated per launch. Electron owns startup, health, errors, resource paths and cleanup. No development runtimes required by downloads.
 
 ## Alternatives evaluated
 | Option | Compatibility/offline/runtime | Reliability/security/maintenance | Size |
@@ -21,7 +21,7 @@ window.surveyapps.retryBackend() -> Promise<void>
 Dashboard files are loaded from renderer/index.html. Logo path ../assets/icon.svg. Grid Studio URL supplied by bridge; load lazily in persistent iframe. Microscopy URL supplied only after authenticated local backend is ready; retain iframe when navigating. No external URLs, fonts or CDN. Renderer has no Node access.
 
 ## Implemented lifecycle and security
-The `surveyapps://app` protocol serves only packaged renderer/assets/Grid Studio files. The dashboard preload exposes status/retry/subscription only, verifies main-frame IPC senders, and never grants renderer Node access. Electron allows network requests only to its current authenticated backend origin. Python receives a random credential over stdin, binds loopback port zero atomically, prints readiness only after binding, verifies the Host, header and Origin, and stops when stdin closes. User-facing startup errors leave Grid Studio available.
+SUGAR retains the SurveyApps! profile and origin so existing chip lists load after an upgrade. The `surveyapps://app` protocol serves only packaged renderer/assets/Grid Studio files. The dashboard preload exposes status/retry/subscription only, verifies main-frame IPC senders, and never grants renderer Node access. Electron allows network requests only to its current authenticated backend origin. Python receives a random credential over stdin, binds loopback port zero atomically, prints readiness only after binding, verifies the Host, header and Origin, and stops when stdin closes. User-facing startup errors leave Grid Studio available.
 
 One window and one backend preserve the original Python module's session-global image/cache semantics. Server callbacks are serialized. Both tools use persistent iframe elements, so changing navigation does not unload their state. All required Dash/Plotly assets are bundled locally.
 
@@ -29,3 +29,7 @@ Official references checked during implementation: [Electron security](https://w
 
 ## Local working-tree integration
 Grid Studio now includes portable alignment settings save/load (`js/settings.js`), loaded image filename display (`#imgName`), crop-to-array, editable `chips.js`, chip list import/export and persistence, `chiplist.js` and `autofit-app.js`. This is `a784c4d` plus uncommitted upstream changes, listed in `vendor/provenance.json`. Run `python3 scripts/sync_grid_studio.py` from this checkout to sync and byte-verify the public allowlist; samples are never traversed. `desktop/protocol.cjs` owns protocol resource handling; `main.cjs` retains session security and lifecycle. `desktop/**` and `vendor/grid-studio/**` package the new scripts; samples are explicitly excluded. Local builds use `dist-local`.
+
+## Presentation
+
+The shell (`renderer/styles.css`), embedded Grid Studio and Fluorescence Lab (`backend/assets/desktop.css`, layout styles/classes in `backend/microscopy_app.py`) share layered dark surfaces and cyan `#58D8F5` actions/selections/focus. Green `#63DB8C` is reserved for ready/OK status. Dashboard and Help use static, subtle gradients; tool chrome is opaque, without backdrop blur or running animations. The scientific image/grid layers retain their original rendering and colors. Re-freeze the backend after Lab presentation changes, sync public Grid Studio files with `scripts/sync_grid_studio.py`, and rebuild the local app from inside `surveyapps/`.

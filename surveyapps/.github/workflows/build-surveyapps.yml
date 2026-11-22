@@ -1,4 +1,4 @@
-name: Build SurveyApps (artifacts only)
+name: Build SUGAR (artifacts only)
 on:
   workflow_dispatch:
 permissions:
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: SurveyApps-${{ matrix.target }}-${{ matrix.arch }}
+          name: SUGAR-${{ matrix.target }}-${{ matrix.arch }}
           path: |
             dist/*.dmg
             dist/*.zip
