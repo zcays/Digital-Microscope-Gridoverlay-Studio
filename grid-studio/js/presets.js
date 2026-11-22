@@ -17,7 +17,7 @@ const FIT_TARGET_PX = 2000;                 // fit-canvas mode: the array's long
 /** Real extent of the N × M array in µm (first well edge to last well edge) and the dead-room border around it. */
 function chipGeometry(P) {
   const extX = P.wide * P.pitch - (P.pitch - P.well), extY = P.long * P.pitch - (P.pitch - P.well);
-  return {extX, extY, longest: Math.max(extX, extY), borderUm: Math.max(Math.max(extX, extY) * S.chip.margin / 100, (P.pitch - P.well) / 2)};   // never less than half a wall, so the array's outer edge is always on the canvas
+  return {extX, extY, longest: Math.max(extX, extY), borderUm: Math.max(Math.max(extX, extY) * S.chip.margin / 100, P.well / 2, (P.pitch - P.well) / 2)};   // never less than the largest array margin (half a well / half a wall), so the array's crop box stays on the canvas
 }
 
 const activePreset = () => S.chip.id ? CHIPS.find(c => c.id === S.chip.id) : null;

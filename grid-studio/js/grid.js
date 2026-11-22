@@ -5,7 +5,7 @@
  *   chip ticked → shape/size/pitch come from the chip table × pxPerUm() (true to scale). Either just the real N×M array centred
  *                 (S.chip.fit) or tiled across the whole canvas.
  *   no chip     → manual sliders: size, gaps, dead-space margins, cols/rows.
- * arrayRect() = the chip array's outer edge (wells + half a wall); arrayCropRect() = the same in whole canvas px while "Crop to array"
+ * arrayRect() = the chip array's crop rectangle (outer well edges + S.chip.arrayPad margin); arrayCropRect() = the same in whole canvas px while "Crop to array"
  *   (S.chip.arrayOnly) is on. Showing / exporting only that rectangle is done in crop.js (updateArrayMask) and export.js.
  * gridLayout() returns {shape, size, pitchX, pitchY, i0..i1, j0..j1, x0, y0} in canvas px; cell (i,j) is at x0+i·pitchX, y0+j·pitchY.
  * Line width: S.grid.stroke × max(1, canvasWidth/1200) — see gridLineWidth().
@@ -17,12 +17,20 @@ const MAX_CELLS = 400000;
 /** Index range of cells (origin + i*pitch) that touch [0, total]; cells cut by the edge are included. */
 const tileRange = (origin, size, pitch, total) => [Math.floor((-size - origin) / pitch) + 1, Math.ceil((total - origin) / pitch)];
 
-/** The chip array's OUTER EDGE on the canvas: every well plus half a wall all the way round (= wide × long whole pitches), in canvas px.
+/** The chip array's crop rectangle in canvas px: outer well edges plus the chosen S.chip.arrayPad margin ('halfWell', 'halfWall', or 'none').
  *  null unless a chip is ticked with "Fit canvas to array" (only then does the array have a definite place). */
 function arrayRect() {
   const P = activePreset(); if (!P || !S.chip.fit) return null;
   const L = gridLayout(S.doc.w, S.doc.h); if (!L) return null;
-  return {x: L.x0 - (L.pitchX - L.size) / 2, y: L.y0 - (L.pitchY - L.size) / 2, w: P.wide * L.pitchX, h: P.long * L.pitchY};
+  const wallX = L.pitchX - L.size, wallY = L.pitchY - L.size;
+  const padX = S.chip.arrayPad === 'none' ? 0 : S.chip.arrayPad === 'halfWall' ? wallX / 2 : L.size / 2;
+  const padY = S.chip.arrayPad === 'none' ? 0 : S.chip.arrayPad === 'halfWall' ? wallY / 2 : L.size / 2;
+  return {
+    x: L.x0 - padX,
+    y: L.y0 - padY,
+    w: P.wide * L.pitchX - wallX + 2 * padX,
+    h: P.long * L.pitchY - wallY + 2 * padY,
+  };
 }
 /** The same rectangle in WHOLE canvas pixels and limited to the canvas (what "Crop to array" shows and exports), or null when it is off / not available. */
 function arrayCropRect() {

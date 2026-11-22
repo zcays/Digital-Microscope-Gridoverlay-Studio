@@ -7,8 +7,8 @@
  * A selection drawn on a rotated image therefore keeps the straight, level edges you drew (rot = −image rotation), instead of
  * turning into a slanted box. Old-style crops without `rot` mean rot = 0. cropFrame() gives renderers its centre / half size / cos / sin.
  * "CROP TO ARRAY" (S.chip.arrayOnly) is a second, separate thing: a preset tied to the GRID, not a hand-drawn crop of the image. While on,
- * updateArrayMask() hides the picture outside the array's outer edge (arrayCropRect() in grid.js) and export.js cuts the PNG to it.
- * It never touches S.img.crop. See the section at the end of the non-tool code below.
+ * updateArrayMask() hides the picture outside the array + its S.chip.arrayPad margin (arrayCropRect() in grid.js) and export.js cuts the PNG to it.
+ * afterAutoFit(res) turns it on after a successful Auto-fit when S.chip.cropAfterFit is on. It never touches S.img.crop. See the section below.
  * Registers TOOLS.crop and the cropNew / cropMove / cropResize drag types at the bottom of this file. */
 
 const rectHasArea = r => r && r.w >= 1 && r.h >= 1;
@@ -125,8 +125,13 @@ function updateCrop() {
   $('#cropApply').disabled = !rectHasArea(c);
 }
 
-/* ---------------- "Crop to array": show + export only the chip array's outer edge ---------------- */
-/** "Crop to array" on screen: hide the picture outside the array's outer edge. Done with a CSS clip on the image canvas, so it is the same
+/* ---------------- "Crop to array": show + export only the array + its margin ---------------- */
+function arrayPadDesc() {
+  return S.chip.arrayPad === 'none' ? 'the outer edges of the wells (no extra space around them)'
+    : S.chip.arrayPad === 'halfWall' ? 'all wells plus half a wall around them'
+    : 'all wells plus half a well around them';
+}
+/** "Crop to array" on screen: hide the picture outside the array crop box. Done with a CSS clip on the image canvas, so it is the same
  *  for the GPU and the software renderer and never touches the image settings. Called every frame (main.js). */
 function updateArrayMask() {
   const r = arrayCropRect(), pct = v => (100 * v).toFixed(4) + '%';
@@ -137,13 +142,16 @@ function updateArrayMask() {
 /** What the Crop panel says about "Crop to array" right now. */
 function arrayCropText() {
   const full = arrayRect(); if (!full) return 'Crop to array needs a ticked chip version with “Fit canvas to array”.';
-  if (!S.chip.arrayOnly) return 'Trims the picture to the array’s outer edge (all wells plus half a wall around them) and makes Export PNG save exactly that. Line the photo up first, then tick this; untick it to see the dead room again.';
+  const desc = arrayPadDesc();
+  if (!S.chip.arrayOnly) return `Trims the picture to ${desc} and makes Export PNG save exactly that. Line the photo up first, then tick this; untick it to see the dead room again.`;
   const r = arrayCropRect(); if (!r) return 'On, but the array lies outside the canvas (check Offset X / Y in the Grid panel), so Export PNG saves the whole canvas.';
   const cut = r.w < Math.round(full.w) - 1 || r.h < Math.round(full.h) - 1;
-  return `On: the picture is trimmed to the array’s outer edge (all wells plus half a wall around them) and Export PNG saves exactly that, ${r.w} × ${r.h} px.` +
+  return `On: the picture is trimmed to ${desc} and Export PNG saves exactly that, ${r.w} × ${r.h} px.` +
     (cut ? ' Part of the array lies outside the canvas (check Offset X / Y in the Grid panel), so that part is missing.' : ' The dead room around the array is left out.');
 }
-function setArrayOnly(on) { S.chip.arrayOnly = !!on; refresh('gl', 'crop', 'status'); }
+function setArrayOnly(on) { S.chip.arrayOnly = !!on; refresh('gl', 'crop', 'status'); updateArrayMask(); }
+/** Called by Auto-fit after a successful fit (full or corner-assisted). Switches "Crop to array" on when S.chip.cropAfterFit is on. */
+function afterAutoFit(res) { if (res && res.ok && S.chip.cropAfterFit) setArrayOnly(true); }
 
 /* ---------------- tool + mouse drags (registered into the registries in state.js) ---------------- */
 const insideRect = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;

@@ -57,7 +57,8 @@ Add `?renderer=cpu` to the address to force software mode for testing.
 - Move, scale and rotate the image; arrow-key nudging
 - Crop tool with aspect presets and undo — it trims **only the image**; the canvas and the grid never change (Reset crop brings the whole image back); a crop drawn on a rotated image keeps the straight edges you drew
 - Keyboard shortcuts (press `?` in the app) and per-setting arrow-key adjustment
-- **Crop to array**: one tick (Crop panel, or "array only" next to Export) trims the picture to the array's outer edge — all wells plus half a wall around them — and Export PNG then saves exactly that and nothing more (`array-<chip>.png`). Line the photo up first (the dead room around the array helps with that), then tick it; untick it to see the dead room again
+- **Crop to array**: trims the picture to the array plus the **Space around the array** you choose in the Crop panel — **Half a well** (default), Half a wall, or None — and makes Export PNG save exactly that, whether you export image + grid, image only or grid only (`array-<chip>.png`). It switches on by itself after a successful Auto-fit (untick **Crop to array after Auto-fit** to stop that); Undo auto-fit switches it back. Untick it to see the dead room again.
+- **Pick 4 corners (half human, half automatic):** when Auto-fit struggles (heavy tissue, faint or hidden array edges), press **Pick 4 corners…** in the Chip version panel (or `P`), click the outer corner of each of the four corner wells in any order (a magnifier follows the cursor; drag a numbered marker to adjust, Backspace removes the last, Esc cancels) and press Enter. Your corners decide where the array is; the app then measures the wells to correct tilt, perspective, fisheye and distortion. If the wells can't be measured well enough it lines the photo up from your corners alone and says so.
 - **Save / load settings:** keep an alignment in a small JSON file and reopen it with the image later, in either order. The top bar shows the open image’s file name (hover for the full name and pixel size).
 - PNG export of image + grid (both, or either one) at the full canvas resolution, including fisheye correction, distortion and crop
 - Grid line ("wall") thickness is adjustable (Line width) and scales with the canvas size so it stays clearly visible
@@ -119,6 +120,7 @@ Press `?` (or `H`) in the app to see this list. On Mac use `⌘` where it says `
 | `R` / `M` | Reset the image position, scale and rotation / centre the image |
 | `\` | Show the original / fisheye-corrected image (before / after) |
 | `A` | Auto-fit the image to the ticked chip's grid |
+| `P` | Pick 4 corners for Auto-fit (Enter fits, Backspace removes the last corner, Esc cancels) |
 | `G` | Show or hide the grid |
 | `[` `]` | Square size − / + (manual grid only) |
 | `{` `}` | Grid spacing − / + (manual grid only) |
@@ -147,5 +149,5 @@ Self-tests: open `grid-studio/tests.html` (should say PASS).
 
 `grid-studio/index.html` is the page, `grid-studio/chips.js` is the editable built-in chip table, `grid-studio/css/` the styles, and `grid-studio/js/` holds one script per concern:
 `state` (state + scheduler), `presets` (chip scale), `chiplist` (chip list: validation, import), `actions`, `warp` (distort), `gl` (GPU image layer), `cpu` (software image layer), `render` (picks one), `images`, `grid`,
-`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit analysis) + `autofit-app` (its buttons), `ui` + `panels` (settings), `tools` (mouse), `settings` (alignment JSON + image name), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
+`view`, `crop`, `cv` (vision toolbox) + `autofit` (Auto-fit analysis) + `autofit-app` (its buttons) + `corners` (Pick 4 corners tool), `ui` + `panels` (settings), `tools` (mouse), `settings` (alignment JSON + image name), `keyboard`, `export`, `main`. Scripts are plain `<script>` tags
 loaded in order, which is why the app also works from disk. Built-in chip data lives in `grid-studio/chips.js`.

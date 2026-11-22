@@ -15,7 +15,7 @@ helpEl.onclick = e => { if (e.target === helpEl) toggleHelp(false); };
 
 // Single-key shortcuts (letters matched case-insensitively). Ignored while typing in a text / number field.
 const KEY_ACTIONS = {
-  v: () => setTool('move'), c: () => setTool('crop'), d: () => setTool('warp'),
+  v: () => setTool('move'), c: () => setTool('crop'), d: () => setTool('warp'), p: startCornerPick,
   a: autoFit, g: toggleGrid, h: toggleHelp, '?': toggleHelp,
   r: resetImageTransform, m: centerImage, f: fitZoom, 0: fitZoom, 1: () => setZoom(1),
   '+': zoomIn, '=': zoomIn, '-': zoomOut, _: zoomOut,

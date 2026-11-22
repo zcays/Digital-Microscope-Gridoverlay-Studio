@@ -309,6 +309,161 @@ frame.onload = () => setTimeout(async () => {
     }
   }
 
+  // ---- Pick corners tool (corner-assisted Auto-fit UI + coordinate mapping) ----
+  {
+    const origImg = E('S.img.el'), origName = E('S.img.name'), origSnap = E('settingsSnapshot()');
+    const origTransient = E('({crop:S.crop, tool:S.tool, zoom:S.zoom, undo:undoStack.slice(), af:afUndoState, info:$("#autoFitInfo") ? $("#autoFitInfo").textContent : ""})');
+    try {
+      test('corners: canvasToSourcePoint and sourceToCanvasPoint round-trip within 0.05 px under rotation, scale, lens, handles, fine mesh, bypass and disabled warp', () => {
+        E(`selectChip('V12'); setChipFit(true);
+           Object.assign(S.img, {x: 42.5, y: -27.25, scale: 1.24, rot: 14.5});
+           Object.assign(S.lens, {k1: .16, k2: -.04, cx: .48, cy: .53, bypass: false});
+           Object.assign(S.warp, defaultWarp(), {enabled: true});
+           S.warp.c.nw = {x: .03, y: .02}; S.warp.c.ne = {x: .96, y: .04}; S.warp.c.se = {x: .95, y: .97}; S.warp.c.sw = {x: .02, y: .96};
+           S.warp.dev.n = {x: .01, y: -.015}; S.warp.dev.w = {x: -.012, y: .008};
+           S.warp.mesh = {n: 17, d: Array.from({length: 2 * 17 * 17}, (_, k) => .004 * Math.sin(k * .41))};`);
+        const samples = [[120, 95], [1050, 110], [1080, 690], [140, 710], [600, 400], [312.4, 528.7]];
+        const checkAll = () => samples.every(([sx, sy]) => {
+          const c = E(`sourceToCanvasPoint(${sx}, ${sy})`), s = E(`canvasToSourcePoint(${c.x}, ${c.y})`), c2 = E(`sourceToCanvasPoint(${s.x}, ${s.y})`);
+          const fw = E(`(() => { const th = afCurrent(); if (!(S.warp.enabled && warpActive())) for (let i = AF_WARP; i < 22; i++) th[i] = 0; const out = [0,0,0,0]; afForward(th, {w: S.img.w, h: S.img.h, cx: S.lens.cx, cy: S.lens.cy, docW: S.doc.w, docH: S.doc.h, mesh: S.warp.enabled && warpActive() ? S.warp.mesh : null})(${sx}, ${sy}, out); return {x: out[0], y: out[1]}; })()`);
+          return Math.hypot(s.x - sx, s.y - sy) < .05 && Math.hypot(c2.x - c.x, c2.y - c.y) < .05 && Math.hypot(c.x - fw.x, c.y - fw.y) < 1e-6;
+        });
+        const fullOk = checkAll();
+        E('S.lens.bypass = true'); const bypassOk = checkAll();
+        E('S.lens.bypass = false; S.warp.enabled = false'); const noWarpOk = checkAll();
+        E('S.lens.bypass = true; S.warp.enabled = false'); const bothOffOk = checkAll();
+        E('S.lens.bypass = false; S.warp.enabled = true');
+        return fullOk && bypassOk && noWarpOk && bothOffOk;
+      });
+
+      test('corners: refuses to enter without an image or without a ticked chip, with plain messages in toast and #autoFitInfo', () => {
+        E('resetLens(); resetImageTransform(); resetWarp(); selectChip(null); setTool("move")');
+        key('p');
+        const noChip = E('S.tool') === 'move' && /chip version/i.test(E('$("#autoFitInfo").textContent')) && /chip version/i.test(E('dom.toast.textContent'));
+        E('setTool("corners")');
+        const noChipToolbar = E('S.tool') === 'move';
+        E('selectChip("V12"); S.img.el = null; setTool("move")');
+        E('startCornerPick()');
+        const noImg = E('S.tool') === 'move' && /Load an image first/i.test(E('$("#autoFitInfo").textContent')) && /Load an image first/i.test(E('dom.toast.textContent'));
+        E('S.img.el = window.__origCornerImg || null');
+        E('setImage')(origImg, origName);
+        return noChip && noChipToolbar && noImg;
+      });
+
+      test('corners: simulated clicks place 1–4 markers, dragging adjusts a marker, Backspace removes last, Esc cancels, and image settings never change', () => {
+        E('selectChip("V12"); setChipFit(true); resetLens(); resetImageTransform(); resetWarp(); S.img.rot = 6; S.img.scale = 1.1; S.img.x = 30; S.img.y = 20; S.lens.k1 = .08; refresh("gl","grid","layout","warp","status"); frame()');
+        const beforeTh = JSON.stringify(E('afCurrent()'));
+        key('p');
+        const entered = E('S.tool') === 'corners' && E('$("#cornerBanner").style.display') === 'flex' && E('$("#cornerFit").disabled') === true;
+        const stage = E('dom.stage'), origCap = stage.setPointerCapture;
+        stage.setPointerCapture = () => {};
+        try {
+          const clickCanvas = (cx, cy) => {
+            const r = stage.getBoundingClientRect(), z = E('S.zoom'), clientX = r.left + cx * z, clientY = r.top + cy * z;
+            stage.dispatchEvent(new w.PointerEvent('pointerdown', {bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX, clientY}));
+            stage.dispatchEvent(new w.PointerEvent('pointermove', {bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX, clientY}));
+            stage.dispatchEvent(new w.PointerEvent('pointerup', {bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX, clientY}));
+          };
+          const dragCanvas = (x0, y0, x1, y1) => {
+            const r = stage.getBoundingClientRect(), z = E('S.zoom');
+            stage.dispatchEvent(new w.PointerEvent('pointerdown', {bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: r.left + x0 * z, clientY: r.top + y0 * z}));
+            stage.dispatchEvent(new w.PointerEvent('pointermove', {bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: r.left + x1 * z, clientY: r.top + y1 * z}));
+            stage.dispatchEvent(new w.PointerEvent('pointerup', {bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: r.left + x1 * z, clientY: r.top + y1 * z}));
+          };
+          const wantSrc = [[180, 140], [980, 150], [960, 660], [195, 650]];
+          const wantCanvas = wantSrc.map(([sx, sy]) => E(`sourceToCanvasPoint(${sx}, ${sy})`));
+          clickCanvas(wantCanvas[0].x, wantCanvas[0].y);
+          clickCanvas(wantCanvas[1].x, wantCanvas[1].y);
+          const twoMsg = /2 of 4/.test(E('$("#cornerBannerText").textContent')) && E('$("#cornerLoupe").style.display') === 'block';
+          clickCanvas(wantCanvas[2].x, wantCanvas[2].y);
+          clickCanvas(wantCanvas[3].x, wantCanvas[3].y);
+          const fourPlaced = E('cornerPts.length') === 4 && E('$("#cornerFit").disabled') === false && E('$("#cornersvg").style.display') === 'block';
+          const ptsMatch = wantSrc.every(([sx, sy], i) => {
+            const p = E(`cornerPts[${i}]`);
+            return Math.hypot(p.x - sx, p.y - sy) < .05;
+          });
+          // Drag marker 2 (index 1) to a new source point
+          const movedSrc = [1010, 175], movedCanvas = E(`sourceToCanvasPoint(${movedSrc[0]}, ${movedSrc[1]})`);
+          dragCanvas(wantCanvas[1].x, wantCanvas[1].y, movedCanvas.x, movedCanvas.y);
+          const draggedP = E('cornerPts[1]'), dragOk = Math.hypot(draggedP.x - movedSrc[0], draggedP.y - movedSrc[1]) < .05;
+          // Backspace removes the 4th marker
+          key('Backspace');
+          const afterBs = E('cornerPts.length') === 3 && E('$("#cornerFit").disabled') === true && E('$("#cornersvg").style.display') === 'none';
+          // Picking never changed any image setting
+          const unchangedTh = beforeTh === JSON.stringify(E('afCurrent()'));
+          // Esc cancels and returns to Move
+          key('Escape');
+          const afterEsc = E('S.tool') === 'move' && E('cornerPts.length') === 0 && E('$("#cornerBanner").style.display') === 'none';
+          return entered && twoMsg && fourPlaced && ptsMatch && dragOk && afterBs && unchangedTh && afterEsc;
+        } finally {
+          stage.setPointerCapture = origCap;
+        }
+      });
+
+      test('corners: markers follow the photo when S.img.x/rot/scale change, hide on tool switch, and clear on chip or image change', () => {
+        E('selectChip("V12"); setChipFit(true); resetLens(); resetImageTransform(); resetWarp(); S.warp.enabled = true; S.lens.k1 = .1; S.warp.c.nw = {x: .03, y: .02}; startCornerPick()');
+        const s0 = {x: 325.5, y: 210.25}, c0 = E(`sourceToCanvasPoint(${s0.x}, ${s0.y})`);
+        E(`dragTypes.cornerPlace.start({}, {x: ${c0.x}, y: ${c0.y}})`);
+        // Change S.img.x, S.img.y, S.img.rot, S.img.scale
+        E('S.img.x += 75; S.img.y -= 40; S.img.rot = -11.5; S.img.scale = 1.32; refresh("gl","warp"); frame()');
+        const marker = E('cornerPts[0]'), proj = E(`sourceToCanvasPoint(${marker.x}, ${marker.y})`);
+        const fw = E(`(() => { const out = [0,0,0,0]; afForward(afCurrent(), {w: S.img.w, h: S.img.h, cx: S.lens.cx, cy: S.lens.cy, docW: S.doc.w, docH: S.doc.h, mesh: S.warp.mesh})(${s0.x}, ${s0.y}, out); return {x: out[0], y: out[1]}; })()`);
+        const el = E('cornerMarkerEls[0]'), z = E('S.zoom');
+        const domFollows = Math.abs(parseFloat(el.style.left) - fw.x * z) < .2 && Math.abs(parseFloat(el.style.top) - fw.y * z) < .2;
+        const followsOk = Math.hypot(marker.x - s0.x, marker.y - s0.y) < .05 && Math.hypot(proj.x - fw.x, proj.y - fw.y) < .05 && domFollows;
+        // Switching tool hides markers but keeps them
+        E('setTool("move"); frame()');
+        const hiddenButKept = E('cornerPts.length') === 1 && E('$("#cornerlayer").style.display') === 'none';
+        // Changing chip clears markers
+        E('selectChip("V3.1"); frame()');
+        const clearedOnChip = E('cornerPts.length') === 0;
+        // Place again, then load a new image → clears markers
+        E('startCornerPick(); dragTypes.cornerPlace.start({}, {x: 200, y: 200})');
+        const hadOne = E('cornerPts.length') === 1;
+        E('setImage')(origImg, origName);
+        const clearedOnImg = E('cornerPts.length') === 0;
+        return followsOk && hiddenButKept && clearedOnChip && hadOne && clearedOnImg;
+      });
+
+      test('corners: Enter with 4 markers calls afRunCorners(sourcePts, cb); clears & returns to Move on success; keeps markers on failure', () => {
+        E('selectChip("V12"); setChipFit(true); resetLens(); resetImageTransform(); resetWarp(); startCornerPick()');
+        const expected = [[150, 120], [1020, 130], [1010, 680], [160, 670]];
+        for (const [sx, sy] of expected) {
+          const c = E(`sourceToCanvasPoint(${sx}, ${sy})`);
+          E(`dragTypes.cornerPlace.start({}, {x: ${c.x}, y: ${c.y}})`);
+        }
+        const beforeTh = JSON.stringify(E('afCurrent()'));
+        let calls = [], savedCb = null;
+        const prevAfRunCorners = w.afRunCorners;
+        try {
+          // 1) Stub failure: markers must stay and tool stays 'corners'
+          w.afRunCorners = (pts, cb) => { calls.push(pts); savedCb = cb; cb({ok: false, reason: 'Synthetic failure'}); };
+          key('Enter');
+          const calledOnce = calls.length === 1 && calls[0].length === 4 &&
+            expected.every(([sx, sy]) => calls[0].some(p => Math.hypot(p.x - sx, p.y - sy) < .5));
+          const keptOnFail = E('cornerPts.length') === 4 && E('S.tool') === 'corners' && beforeTh === JSON.stringify(E('afCurrent()'));
+          // 2) Stub success: markers clear and tool returns to 'move'
+          w.afRunCorners = (pts, cb) => { calls.push(pts); cb({ok: true, mode: 'corners'}); };
+          key('Enter');
+          const clearedOnOk = calls.length === 2 && E('cornerPts.length') === 0 && E('S.tool') === 'move';
+          return calledOnce && keptOnFail && clearedOnOk;
+        } finally {
+          if (prevAfRunCorners === undefined) delete w.afRunCorners; else w.afRunCorners = prevAfRunCorners;
+        }
+      });
+    } finally {
+      E('clearCorners()');
+      E('setImage')(origImg, origName);
+      E('applySettings')(origSnap);
+      E('undoStack').splice(0, Infinity, ...origTransient.undo);
+      E('S').crop = origTransient.crop;
+      E('S').zoom = origTransient.zoom;
+      E('setTool')(origTransient.tool);
+      E('(v) => { afUndoState = v.af; if ($("#autoFitInfo")) $("#autoFitInfo").textContent = v.info; }')(origTransient);
+      E('dom.toast.style.display = "none"; clearTimeout(toast.timer); refresh("gl","grid","layout","crop","warp","status"); frame()');
+    }
+  }
+
   // ---- crop ----
   test('crop only masks the image: canvas and grid are unchanged, undo/reset restore it', () => {
     const grid0 = JSON.stringify(E('gridLayout(S.doc.w, S.doc.h)')), doc0 = E('[S.doc.w, S.doc.h]').join('x');
@@ -335,7 +490,7 @@ frame.onload = () => setTimeout(async () => {
   });
 
   test('Crop to array: export is exactly the array (wells + half a wall), on-screen picture is clipped, canvas/grid/image settings untouched', () => {
-    E("resetImageTransform(); resetLens(); resetWarp(); S.img.crop = null; S.grid.visible = true; S.grid.offX = 0; S.grid.offY = 0; selectChip('V12'); setChipFit(true)");
+    E("resetImageTransform(); resetLens(); resetWarp(); S.img.crop = null; S.grid.visible = true; S.grid.offX = 0; S.grid.offY = 0; S.chip.arrayPad = 'halfWall'; selectChip('V12'); setChipFit(true)");
     const before = JSON.stringify(E('[S.doc.w, S.doc.h, S.img.x, S.img.y, S.img.scale, S.img.rot, S.img.crop, gridLayout(S.doc.w, S.doc.h)]')), P = E('activePreset()'), L = E('gridLayout(S.doc.w, S.doc.h)');
     const off = E('buildExportCanvas({image: true, grid: true})'), offOk = off.width === E('S.doc.w') && off.height === E('S.doc.h') && E('dom.gl.style.clipPath') === '';
     E('setArrayOnly(true); frame()'); const r = E('arrayCropRect()'), c = E('buildExportCanvas({image: true, grid: true})'), whole = E('buildExportCanvas({image: true, grid: true, array: false})');
@@ -352,6 +507,161 @@ frame.onload = () => setTimeout(async () => {
     E("selectChip('V11'); frame()"); const staysOff = E('arrayCropRect()') === null && E('dom.gl.style.clipPath') === ''; E('selectChip(null); frame()');
     return offOk && sized && same && clipped && name === 'array-V12.png' && box && untouched && zeroRoom && offCanvas && infoBack && needsFit && offWithChip && staysOff && E('dom.gl.style.clipPath') === '' && E('exportFileName()') === 'grid-overlay.png';
   });
+
+  // ---- Crop to array: margins (halfWell / halfWall / none), exports, afterAutoFit, settings, UI ----
+  {
+    const saved = E('settingsSnapshot()');
+    const savedGrid = E('({...S.grid})');
+    try {
+      E("resetImageTransform(); resetLens(); resetWarp(); S.img.crop = null; S.grid.visible = true; S.grid.offX = 0; S.grid.offY = 0; S.chip.arrayPad = 'halfWell'; S.chip.cropAfterFit = true; S.chip.arrayOnly = false; setChipFit(true); setChipMargin(8)");
+
+      for (const c of E('CHIPS')) {
+        test(`${c.id}: arrayRect margins (halfWell / halfWall / none) and all 3 export modes match whole canvas`, () => {
+          E(`selectChip(${JSON.stringify(c.id)}); setChipFit(true); setChipMargin(8); S.grid.offX = 0; S.grid.offY = 0; S.grid.visible = true`);
+          const L = E('gridLayout(S.doc.w, S.doc.h)'), k = E('pxPerUm()');
+          const wellPx = c.well * k, wallPx = c.wall * k, pitchPx = c.pitch * k;
+
+          E("S.chip.arrayPad = 'halfWell'; setArrayOnly(true); frame()");
+          const rWell = E('arrayRect()');
+          const okWell = near(rWell.x, L.x0 - wellPx / 2, 1e-6) && near(rWell.y, L.y0 - wellPx / 2, 1e-6) &&
+            near(rWell.w, (c.wide * c.pitch - c.wall + c.well) * k, 1e-6) &&
+            near(rWell.h, (c.long * c.pitch - c.wall + c.well) * k, 1e-6);
+
+          E("S.chip.arrayPad = 'halfWall'; setArrayOnly(true); frame()");
+          const rWall = E('arrayRect()');
+          const okWall = near(rWall.x, L.x0 - wallPx / 2, 1e-6) && near(rWall.y, L.y0 - wallPx / 2, 1e-6) &&
+            near(rWall.w, c.wide * pitchPx, 1e-6) && near(rWall.h, c.long * pitchPx, 1e-6);
+
+          E("S.chip.arrayPad = 'none'; setArrayOnly(true); frame()");
+          const rNone = E('arrayRect()');
+          const okNone = near(rNone.x, L.x0, 1e-6) && near(rNone.y, L.y0, 1e-6) &&
+            near(rNone.w, (c.wide * c.pitch - c.wall) * k, 1e-6) &&
+            near(rNone.h, (c.long * c.pitch - c.wall) * k, 1e-6);
+
+          let exportsOk = true;
+          for (const [image, grid] of [[true, true], [true, false], [false, true]]) {
+            const whole = E(`buildExportCanvas({image: ${image}, grid: ${grid}, array: false})`), wCtx = whole.getContext('2d');
+            for (const pad of ['halfWell', 'halfWall', 'none']) {
+              E(`S.chip.arrayPad = '${pad}'; setArrayOnly(true); frame()`);
+              const full = E('arrayRect()'), r = E('arrayCropRect()'), sub = E(`buildExportCanvas({image: ${image}, grid: ${grid}})`);
+              if (!r || sub.width !== r.w || sub.height !== r.h || Math.abs(r.w - full.w) > 1 || Math.abs(r.h - full.h) > 1) { exportsOk = false; break; }
+              const a = sub.getContext('2d').getImageData(0, 0, sub.width, sub.height).data;
+              const b = wCtx.getImageData(r.x, r.y, r.w, r.h).data;
+              if (a.length !== b.length) { exportsOk = false; break; }
+              let sum = 0, diffPx = 0;
+              for (let i = 0; i < a.length; i += 4) {
+                const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) + Math.abs(a[i + 3] - b[i + 3]);
+                if (d) { sum += d; diffPx++; }
+              }
+              if (!grid && diffPx > 0) { exportsOk = false; break; }
+              if (sum / a.length >= .05 || diffPx / (a.length / 4) >= .001) { exportsOk = false; break; }
+              const clip = E('dom.gl.style.clipPath');
+              if (!/^inset\(/.test(clip)) { exportsOk = false; break; }
+            }
+            if (!exportsOk) break;
+          }
+          return okWell && okWall && okNone && exportsOk;
+        });
+      }
+
+      test('Crop to array: margin stays on the canvas at Dead room 0% for every chip', () => {
+        for (const c of E('CHIPS')) {
+          E(`selectChip(${JSON.stringify(c.id)}); setChipFit(true); setChipMargin(0); S.grid.offX = 0; S.grid.offY = 0; setArrayOnly(true)`);
+          for (const pad of ['halfWell', 'halfWall', 'none']) {
+            E(`S.chip.arrayPad = '${pad}'; frame()`);
+            const z = E('arrayRect()'), zc = E('arrayCropRect()'), W = E('S.doc.w'), H = E('S.doc.h');
+            if (!z || !zc || z.x < -.51 || z.y < -.51 || z.x + z.w > W + .51 || z.y + z.h > H + .51) return false;
+            if (Math.abs(zc.w - z.w) > 1 || Math.abs(zc.h - z.h) > 1) return false;
+            if (/outside the canvas/.test(E('arrayCropText()'))) return false;
+          }
+        }
+        return true;
+      });
+
+      test('afterAutoFit: turns Crop to array on when cropAfterFit is true, leaves it alone when false, ignores failures', () => {
+        E("selectChip('V12'); setChipFit(true); setChipMargin(8); S.chip.arrayPad = 'halfWell'");
+        E('S.chip.cropAfterFit = true; setArrayOnly(false); frame()');
+        E('afterAutoFit({ok: false, reason: "refused"}); frame()');
+        const ignoredFail = E('S.chip.arrayOnly') === false;
+        E('afterAutoFit(null); frame()');
+        const ignoredNull = E('S.chip.arrayOnly') === false;
+        E('afterAutoFit({ok: true}); frame()');
+        const turnedOn = E('S.chip.arrayOnly') === true && E('arrayCropRect()') !== null && /^inset\(/.test(E('dom.gl.style.clipPath'));
+        E('S.chip.cropAfterFit = false; setArrayOnly(false); frame()');
+        E('afterAutoFit({ok: true}); frame()');
+        const stayedOff = E('S.chip.arrayOnly') === false;
+        E('setArrayOnly(true); frame(); afterAutoFit({ok: true}); frame()');
+        const stayedOn = E('S.chip.arrayOnly') === true;
+        return ignoredFail && ignoredNull && turnedOn && stayedOff && stayedOn;
+      });
+
+      test('settings: arrayPad and cropAfterFit round-trip, legacy files default to halfWall / true, bad values refused', () => {
+        const normal = s => JSON.stringify(s, (k, v) => k === 'savedAt' ? undefined : v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k => [k, v[k]])) : v);
+        E("selectChip('V12'); setChipFit(true); setChipMargin(8); setArrayOnly(true)");
+        for (const pad of ['halfWell', 'halfWall', 'none']) {
+          for (const caf of [true, false]) {
+            E(`S.chip.arrayPad = '${pad}'; S.chip.cropAfterFit = ${caf}; refresh('gl', 'crop', 'status')`);
+            const snap = E('settingsSnapshot()');
+            E("S.chip.arrayPad = 'halfWall'; S.chip.cropAfterFit = true; setArrayOnly(false)");
+            const parsed = E(`parseSettings(${JSON.stringify(E('settingsToText')(snap))}).settings`);
+            const res = E(`applySettings(${JSON.stringify(parsed)})`);
+            if (!res.ok || E('S.chip.arrayPad') !== pad || E('S.chip.cropAfterFit') !== caf || normal(snap) !== normal(E('settingsSnapshot()'))) return false;
+          }
+        }
+        // Legacy file without arrayPad / cropAfterFit keys
+        const legacy = E('settingsSnapshot()');
+        delete legacy.chip.arrayPad; delete legacy.chip.cropAfterFit;
+        E("S.chip.arrayPad = 'none'; S.chip.cropAfterFit = false");
+        const legParsed = E(`parseSettings(${JSON.stringify(E('settingsToText')(legacy))}).settings`);
+        const legRes = E(`applySettings(${JSON.stringify(legParsed)})`);
+        const legSnap = E('settingsSnapshot()');
+        const legOk = legRes.ok && E('S.chip.arrayPad') === 'halfWall' && E('S.chip.cropAfterFit') === true &&
+          legSnap.chip.arrayPad === 'halfWall' && legSnap.chip.cropAfterFit === true &&
+          E("$('#arrayPad').value === 'halfWall' && $('#cropAfterFit').checked === true");
+        // Immediate save after loading legacy file round-trips identically
+        const legResave = E(`applySettings(parseSettings(${JSON.stringify(E('settingsToText')(legSnap))}).settings)`);
+        const roundOk = legResave.ok && normal(legSnap) === normal(E('settingsSnapshot()'));
+        // Bad values refused with plain message and no state change
+        const before = normal(E('settingsSnapshot()'));
+        for (const [mut, rx] of [
+          [s => s.chip.arrayPad = 'quarterWell', /recognised choice/i],
+          [s => s.chip.arrayPad = 42, /recognised choice/i],
+          [s => s.chip.cropAfterFit = 'yes', /true or false/i],
+          [s => s.chip.cropAfterFit = 1, /true or false/i],
+        ]) {
+          const bad = JSON.parse(JSON.stringify(legSnap)); mut(bad);
+          const r = E(`applySettings(${JSON.stringify(bad)})`);
+          if (r.ok || !rx.test(r.reason) || normal(E('settingsSnapshot()')) !== before) return false;
+        }
+        return legOk && roundOk;
+      });
+
+      test('Crop panel controls (#arrayPad and #cropAfterFit) reflect state and update clip, info text and tooltip', () => {
+        E("selectChip('V12'); setChipFit(true); setChipMargin(8); S.grid.offX = 0; S.grid.offY = 0; S.chip.arrayPad = 'none'; S.chip.cropAfterFit = false; setArrayOnly(true); frame()");
+        const padEl = w.document.getElementById('arrayPad'), cafEl = w.document.getElementById('cropAfterFit');
+        const reflected = padEl.value === 'none' && cafEl.checked === false && /outer edges of the wells/.test(E("$('#arrayCropInfo').textContent")) && /outer edges of the wells/.test(E("$('#exArray').parentElement.title"));
+        const clipNone = E('dom.gl.style.clipPath');
+        padEl.value = 'halfWell'; padEl.dispatchEvent(new w.Event('change', {bubbles: true})); E('frame()');
+        const clipWell = E('dom.gl.style.clipPath');
+        const wellOk = E('S.chip.arrayPad') === 'halfWell' && clipWell !== clipNone && /^inset\(/.test(clipWell) &&
+          /half a well/.test(E("$('#arrayCropInfo').textContent")) && /half a well/.test(E("$('#exArray').parentElement.title"));
+        padEl.value = 'halfWall'; padEl.dispatchEvent(new w.Event('change', {bubbles: true})); E('frame()');
+        const clipWall = E('dom.gl.style.clipPath');
+        const wallOk = E('S.chip.arrayPad') === 'halfWall' && clipWall !== clipWell && clipWall !== clipNone &&
+          /half a wall/.test(E("$('#arrayCropInfo').textContent")) && /half a wall/.test(E("$('#exArray').parentElement.title"));
+        cafEl.checked = true; cafEl.dispatchEvent(new w.Event('change', {bubbles: true}));
+        const cafOk = E('S.chip.cropAfterFit') === true;
+        return reflected && wellOk && wallOk && cafOk;
+      });
+    } finally {
+      E('selectChip(null); setChipFit(true); setChipMargin(8)');
+      E(`Object.assign(S.grid, ${JSON.stringify(savedGrid)})`);
+      E("Object.assign(S.chip, {arrayOnly: false, arrayPad: 'halfWell', cropAfterFit: true})");
+      E('resetImageTransform(); resetLens(); resetWarp(); S.img.crop = null; undoStack.length = 0; afUndoState = null; updateUndoButton()');
+      E(`$('#exImg').checked = ${saved.export.image}; $('#exGrid').checked = ${saved.export.grid}`);
+      E('refresh("gl", "grid", "layout", "crop", "warp", "status"); updateArrayMask(); frame()');
+    }
+  }
 
   // ---- software renderer (used when WebGL / hardware acceleration is off) ----
   // 1) forced software mode in a second copy of the app: index.html?renderer=cpu
@@ -472,7 +782,7 @@ frame.onload = () => setTimeout(async () => {
     };
     // In the RENDERED export: brightness at the grid's well centres vs at its wall centres. Aligned = clearly positive, misaligned = ~0.
     window.alignmentContrast = () => {
-      const c = buildExportCanvas({image: true, grid: false}), L = gridLayout(S.doc.w, S.doc.h), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const c = buildExportCanvas({image: true, grid: false, array: false}), L = gridLayout(S.doc.w, S.doc.h), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;   // whole canvas (array: false): Auto-fit now switches "Crop to array" on
       const lum = (x, y) => { const i = (Math.round(y) * c.width + Math.round(x)) * 4; return d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11; }, gap = L.pitchX - L.size; let wall = 0, well = 0;
       for (let j = 1; j < L.j1 - 1; j++) for (let i = 1; i < L.i1 - 1; i++) { const x = L.x0 + i * L.pitchX, y = L.y0 + j * L.pitchY; well += lum(x + L.size / 2, y + L.size / 2); wall += (lum(x - gap / 2, y + L.size / 2) + lum(x + L.size / 2, y - gap / 2)) / 2; }
       return (well - wall) / (well + wall);
@@ -498,6 +808,21 @@ frame.onload = () => setTimeout(async () => {
       return {ok: r.ok, reason: r.reason || '', unchanged, before, after: r.ok ? alignmentContrast() : null, cornerErr: r.ok ? cornerAlignmentError() : null, rot: S.img.rot, k1: S.lens.k1, median: r.stats ? r.stats.medianWell : null, handlesOnly: r.stats ? r.stats.medianHandlesOnly / r.stats.harmonic : null, mesh: !!S.warp.mesh, sides: r.stats ? r.stats.sideErr : null, ms: r.stats ? r.stats.ms : 0};
     };
   `);
+  // Global wall-position medians can pass while one part of a straight array bends.
+  const wallDirectionCheck = E3(`(() => {
+    const width = 64, roi = Array.from({length:width*width},(_,i)=>i);
+    const x = roi.map(i=>i%width), y = roi.map(i=>Math.floor(i/width));
+    const labels = roi.map(()=>1), chip = {wide:64,long:64}, grid = {x0:0,y0:0,pitch:1};
+    const axes = [x,y].map(K=>({F:{K}}));
+    const straight = (x,y,o)=>{o[0]=x; o[1]=y;};
+    const bow = x => x<16 ? 1.8*Math.sin(Math.PI*x/16) : 0;
+    const bent = (x,y,o)=>{o[0]=x; o[1]=y+bow(x);};
+    const check = (walls,start,end)=>afBendsWalls(roi,walls,labels,width,x,y,1,1,grid,chip,start,end);
+    const curvedRows = [axes[0],{F:{K:y.map((v,i)=>v+bow(x[i]))}}];
+    return [check(axes,straight,bent),check(axes,straight,straight),check(curvedRows,straight,bent)];
+  })()`);
+  test('wall directions reject a new bend in one strip of straight wells, and allow a correction that straightens curved rows',
+    () => wallDirectionCheck[0] && !wallDirectionCheck[1] && !wallDirectionCheck[2]);
   const fitCases = [
     ['V12', {angle: 3, barrel: .08}], ['V12', {angle: -7, barrel: .2}], ['V12', {angle: 12, barrel: .03, noise: 40}],
     ['V3.1', {angle: 2, barrel: .12}], ['V10.2', {angle: 1, barrel: .15}], ['V11', {angle: -2, barrel: .05, fill: .6}],
@@ -586,6 +911,118 @@ frame.onload = () => setTimeout(async () => {
   if (realV11) test(`auto-fit on the real V11 photo with tissue over most of the array: ${realV11.ok ? `array corners within ${realV11.corner.toFixed(2)} well of the reference, typical error ${(realV11.s.medianWell * 100).toFixed(0)}% of a well, ${Math.round(realV11.s.inliers * 100)}% matched, wells seen in ${Math.round(realV11.s.visible * 100)}% of the array` : 'refused: ' + realV11.reason}`,
     () => realV11.ok && realV11.s.inliers > .8 && realV11.s.medianWell < .1 && realV11.corner < .35 && realV11.s.edgeSure[0] > 1.5 && realV11.s.edgeSure[1] > 1.5);
   else test('auto-fit on the real V11 tissue photo skipped (samples/v11-tissue-example.jpg not present)', () => true);
+
+  // Each case owns an app iframe so its layout, undo history and crop hook disappear together.
+  const cornerCases = [
+    ['V12', {}], ['V3.1', {}], ['V7.0', {W:2400,H:1800}], ['V11', tissueCases.find(([id,o]) => id === 'V11' && o.hard)[1]],
+    ['V9.1', {W:2000,H:1500}], ['V1-Square', {angle:5}], ['V1-Square', {angle:89,W:1125,H:1500}],
+    ['V12', {angle:0,barrel:0}, 'one side off'], ['V12', {}, 'hidden wells'], ['V12', {barrel:.05}, 'covered edges'],
+    ['V12', {}, 'real', w3.__im, [[276.8,54.4],[1266.3,86.1],[1231.8,1099.5],[230.7,1057.8]]],
+    ['V11', {}, 'real', w3.__im11, [[215.2,74.1],[1573.2,56.5],[1588.2,1416.6],[234.4,1429.4]]]
+  ];
+  for (const [id,opts,kind,photo,reference] of cornerCases) {
+    const name = 'four corners ' + id + ' ' + (kind || (opts.angle || 3) + '°');
+    if (kind === 'real' && !photo) { test(name + ' skipped (photo missing)', () => true); continue; }
+    const f = document.createElement('iframe'), loaded = new Promise(resolve => f.onload = resolve);
+    f.src = 'index.html?nostore'; document.body.append(f); await loaded;
+    const app = f.contentWindow, previousTruth = w3.__lastChipTruth;
+    try {
+      app.photo = photo || w3.makeChipPhoto(id, opts);
+      app.__lastChipTruth = reference ? {corners:reference.map(([x,y]) => ({x,y}))} : w3.__lastChipTruth;
+      app.eval('window.cornerAlignmentError = ' + w3.cornerAlignmentError.toString());
+      app.eval('window.cornerErrorFor = ' + w3.cornerErrorFor.toString());
+      const r = app.eval(`(() => {
+        setImage(photo); selectChip(${JSON.stringify(id)});
+        const pts = __lastChipTruth.corners, kind = ${JSON.stringify(kind || '')};
+        const pitch = Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)/(activePreset().wide-1+activePreset().well/activePreset().pitch);
+        if (kind === 'hidden wells') {
+          const ctx = photo.getContext('2d'); ctx.fillStyle = '#777'; ctx.fillRect(0,0,photo.width,photo.height);
+        }
+        if (kind === 'covered edges') {
+          const ctx = photo.getContext('2d'); ctx.fillStyle = '#777';
+          for (const rect of [[0,0,540,1125],[0,0,1500,320],[1050,0,450,1125]]) ctx.fillRect(...rect);
+        }
+        const plainMissed = ['hidden wells','covered edges'].includes(kind) && (!autoFitNow().ok || cornerAlignmentError() >= 1);
+        const clicks = [2,0,3,1].map(i => {
+          if (kind === 'one side off') return {x:pts[i].x + ([0,3].includes(i) ? pitch : 0), y:pts[i].y};
+          const jitter = [[.3,-.1],[-.25,.2],[.15,-.3],[-.2,.22]][i];
+          return {x:pts[i].x+pitch*jitter[0],y:pts[i].y+pitch*jitter[1]};
+        });
+        setChipFit(${JSON.stringify(id === 'V3.1')}); S.chip.arrayOnly = false;
+        const snap = () => JSON.stringify([afSnapshot(),S.doc,S.chip,S.zoom]);
+        const before = snap(), bad = autoFitFromCorners(clicks.map(() => clicks[0]));
+        const rejected = !bad.ok && !!bad.reason && snap() === before;
+        let calls = 0; window.afterAutoFit = () => { calls++; S.chip.arrayOnly = true; };
+        const t = performance.now(), res = autoFitFromCorners(clicks), ms = Math.round(performance.now()-t);
+        const err = kind === 'real' ? cornerErrorFor(${JSON.stringify(reference || [])}) : cornerAlignmentError();
+        undoAutoFit();
+        return {err,ms,rejected,undo:calls === 1 && snap() === before,refined:res.stats?.refined,msg:afMessage(res),plainMissed};
+      })()`);
+      const detail = name + ' (' + r.err.toFixed(3) + ' pitch, ' + r.ms + ' ms)';
+      if (kind === 'hidden wells') test(detail + ' full fit refused, corner-only fallback', () => r.plainMissed && r.refined === false && r.err < .45);
+      else if (kind === 'covered edges') test(detail + ' recovers full-fit miss', () => r.plainMissed && r.refined && r.err < .2);
+      else if (kind === 'one side off') test(detail, () => r.refined && r.err < .2 && /moved one well/i.test(r.msg));
+      else test(detail, () => r.refined && r.err < (kind === 'real' ? .35 : .2));
+      if (id === 'V3.1') test('four corners undo restores crop with canvas already fitted', () => r.undo);
+      if (id === 'V12' && !kind) {
+        test('four corners rejects repeated clicks and restores the layout', () => r.rejected);
+        test('four corners calls the crop hook once and undo restores crop and layout', () => r.undo);
+      }
+    } finally { w3.__lastChipTruth = previousTruth; f.remove(); }
+  }
+
+  // Per-axis polarity calibration + coherence gating: pincushion-bent chip where X polarity reverses across the array
+  // while Y has oblique top/bottom shading and translucent haze (shared X+Y polarity forms a phase vortex here).
+  {
+    const f = document.createElement('iframe'), loaded = new Promise(resolve => f.onload = resolve);
+    f.src = 'index.html?nostore'; document.body.append(f); await loaded;
+    try {
+      const r = f.contentWindow.eval(`(() => {
+        const W = 1600, H = 1200, P = CHIPS.find(c => c.id === 'V12');
+        const out = document.createElement('canvas'); out.width = W; out.height = H;
+        const ox = out.getContext('2d'), dd = ox.createImageData(W, H);
+        const pitch = Math.min(W * .78 / P.wide, H * .78 / P.long), well = pitch * P.well / P.pitch, gap = pitch - well;
+        const aw = P.wide * pitch - gap, ah = P.long * pitch - gap;
+        const angle = .6, barrel = -.05, aRad = angle * Math.PI / 180, cs = Math.cos(aRad), sn = Math.sin(aRad), R = Math.hypot(W, H) / 2;
+        let rnd = 452; const rand = () => { rnd = (rnd * 1664525 + 1013904223) % 4294967296; return rnd / 4294967296; };
+        for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) {
+          const nx = (xx - W / 2) / R, ny = (yy - H / 2) / R, k = 1 + barrel * (nx * nx + ny * ny);
+          const dx = nx * k * R, dy = ny * k * R, u = cs * dx + sn * dy + aw / 2, v = -sn * dx + cs * dy + ah / 2;
+          let lum = 65;
+          if (u >= -gap / 2 && u <= aw + gap / 2 && v >= -gap / 2 && v <= ah + gap / 2) {
+            const fu = (u + gap / 2) / pitch, fv = (v + gap / 2) / pitch, pu = fu - Math.floor(fu), pv = fv - Math.floor(fv), nu = fu / P.wide, nv = fv / P.long;
+            const xSign = Math.cos(Math.PI * (nu - .15) * 1.15);
+            const xEdge = (pu < .08 || pu > .92) ? 24 * (xSign >= 0 ? 1 : -1) : 0;
+            const yEdge = (pv < .08 || pv > .92) ? -20 : 0;
+            const haze = 1 - .85 * Math.exp(-((nu - .55) ** 2 + (nv - .5) ** 2) / .18);
+            lum = 78 + haze * (xEdge + yEdge) + 20 * xSign * Math.cos(2 * Math.PI * pu) + 22 * Math.cos(Math.PI * nv) * Math.sin(2 * Math.PI * pv) - 10 * Math.cos(2 * Math.PI * pv);
+          }
+          const val = clamp(Math.round(lum + (rand() - .5) * 22), 0, 255), ti = (yy * W + xx) * 4;
+          dd.data[ti] = dd.data[ti + 1] = dd.data[ti + 2] = val; dd.data[ti + 3] = 255;
+        }
+        ox.putImageData(dd, 0, 0);
+        const toSrc = (u, v) => {
+          const dx = u - aw / 2, dy = v - ah / 2, sx = cs * dx - sn * dy, sy = sn * dx + cs * dy, rm = Math.hypot(sx, sy) / R;
+          let r = rm; for (let k = 0; k < 8; k++) r -= (r * (1 + barrel * r * r) - rm) / (1 + 3 * barrel * r * r);
+          const s = rm > 1e-9 ? r / rm : 1; return {x: W / 2 + sx * s, y: H / 2 + sy * s};
+        };
+        const corners = [[0, 0], [aw, 0], [aw, ah], [0, ah]].map(([u, v]) => toSrc(u, v));
+        setImage(out); selectChip(null); selectChip('V12'); resetLens(); resetWarp();
+        const L = gridLayout(S.doc.w, S.doc.h), gw = P.wide * L.pitchX - (L.pitchX - L.size), gh = P.long * L.pitchY - (L.pitchY - L.size);
+        const gc = [[L.x0, L.y0], [L.x0 + gw, L.y0], [L.x0 + gw, L.y0 + gh], [L.x0, L.y0 + gh]];
+        const errNow = () => {
+          const fw = afForward(afCurrent(), {w: S.img.w, h: S.img.h, cx: S.lens.cx, cy: S.lens.cy, docW: S.doc.w, docH: S.doc.h, mesh: S.warp.mesh}), o = [0, 0, 0, 0];
+          return Math.max(...corners.map((c, i) => { fw(c.x, c.y, o); return Math.hypot(o[0] - gc[i][0], o[1] - gc[i][1]) / L.pitchX; }));
+        };
+        const rFull = autoFitNow(false), fullErr = rFull.ok ? errNow() : Infinity, fullK1 = S.lens.k1;
+        resetLens(); resetImageTransform(); resetWarp();
+        const rCorner = autoFitFromCorners(corners, false), cornerErr = rCorner.ok ? errNow() : Infinity, cornerK1 = S.lens.k1;
+        return {fullOk: rFull.ok, fullErr, fullK1, cornerRefined: !!rCorner.stats?.refined, cornerErr, cornerK1};
+      })()`);
+      test(`auto-fit + four corners with pincushion bend and opposite X/Y shading polarity (full ${r.fullErr.toFixed(3)} pitch, k1 ${r.fullK1.toFixed(3)}; corners ${r.cornerErr.toFixed(3)} pitch, refined=${r.cornerRefined})`,
+        () => r.fullOk && r.fullErr < .25 && r.fullK1 < -.02 && r.cornerRefined && r.cornerErr < .25 && r.cornerK1 < -.02);
+    } finally { f.remove(); }
+  }
 
   const bad = results.filter(r => !r[1]);
   out.innerHTML = `<p class="${bad.length ? 'bad' : 'ok'}">${results.length - bad.length} / ${results.length} passed</p>` +

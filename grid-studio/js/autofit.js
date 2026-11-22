@@ -33,6 +33,7 @@ const AF = {
   minSideSamples: 30,      // spatial samples per side before its residual median is used for rejection
   maxSideError: .10,        // well pitches: a measured outer side must meet the same accuracy target, not just the global median
   minInliers: .75,          // share of samples within a quarter period of their wall (random data gives .5)
+  maxAddedTilt: 2,          // degrees of added wall tilt tolerated in a supported region
   meshNodes: 17,            // fine distortion mesh: nodes per side (16 cells; lines up with the 32- and 16-cell render meshes)
   meshSmooth: .5,           // stiffness of the fine mesh (higher = smoother, follows less local detail)
   meshPasses: 4,            // the errors are only known mod 1 and far-off samples are down-weighted, so the mesh is fitted in passes
@@ -47,6 +48,7 @@ const AF = {
   edgeSearch: 8,            // columns/rows just outside the candidate array that are checked for wells that should not be there
   cornerSeen: .15,          // a corner region of the array with less than this share of visible wells is reported as hidden
   minEdgeSure: 1.5,          // below this the array's first/last column (or row) was not clearly seen: the fit may sit a whole well off → the user is told
+  maxClickMotion: .6,         // largest supported refinement at a clicked corner, in well pitches
   maxAbsError: 2.5,         // lattice periods: absolute wall numbers further off than this from the model are treated as unknown (mod 1)
   maxSpill: .55,            // well pattern just outside the fitted array, relative to inside; more = the photo has more wells than the chip
 };
@@ -107,12 +109,106 @@ function afSolveMeshAxis(samples, n, smooth) {
   return cvSolve(A, Array.from(b));
 }
 
+/** Compare wall directions across the array. Phase differences within one visible patch give its
+ * local wall normal regardless of the absolute wall number. Project a short tangent on that wall
+ * through both models. Check each direction and region separately so a good centre cannot hide
+ * an edge that the correction has bent. All sample positions passed to the models are source px. */
+function afBendsWalls(roi, axes, labels, width, xw, yw, ws, pitch, grid, chip, before, after) {
+  const bins = Array.from({length: 32}, () => []);
+  const centre = [], tip = [], base = [], baseTip = [];
+  for (const i of roi) {
+    const lag = 2, xIndex = i % width;
+    if (!labels[i] || xIndex < lag || xIndex + lag >= width) continue;
+    const left = i-lag, right = i+lag, up = i-lag*width, down = i+lag*width;
+    if ([left,right,up,down].some(j => labels[j] !== labels[i])) continue;
+    const x = xw[i]/ws, y = yw[i]/ws;
+    after(x,y,centre);
+    before(x,y,base);
+    if (!centre.slice(0,2).every(Number.isFinite)) return true;
+    const col = Math.floor(4*(centre[0]-grid.x0)/(grid.pitch*chip.wide));
+    const row = Math.floor(4*(centre[1]-grid.y0)/(grid.pitch*chip.long));
+    if (col < 0 || col > 3 || row < 0 || row > 3) continue;
+    for (let axis = 0; axis < 2; axis++) {
+      const k = axes[axis].F.K, tx = -(k[down]-k[up]), ty = k[right]-k[left];
+      const length = Math.hypot(tx,ty);
+      if (!(length > 0)) continue;
+      const dx = tx/length*pitch, dy = ty/length*pitch;
+      after(x+dx,y+dy,tip);
+      before(x+dx,y+dy,baseTip);
+      const angle = (a,b) => Math.atan2(Math.abs(b[axis]-a[axis]),Math.abs(b[1-axis]-a[1-axis]))*180/Math.PI;
+      const change = angle(centre,tip)-angle(base,baseTip);
+      if (!Number.isFinite(change)) return true;
+      bins[2*(4*row+col)+axis].push(change);
+    }
+  }
+  return bins.some(region => region.length >= AF.minSideSamples && afPercentile(region,50) > AF.maxAddedTilt);
+}
+
+/** Order the clicks around their centroid, then fit a similarity and a bilinear corner patch. */
+function afCornerSeed(pts, chip, grid, geo) {
+  const invalid = {ok: false, reason: 'Pick four different outer well corners around the whole array.'};
+  if (!Array.isArray(pts) || pts.length !== 4 || !Array.from(pts).every(p => p && Number.isFinite(p.x) && Number.isFinite(p.y) &&
+      p.x >= 0 && p.y >= 0 && p.x <= geo.w && p.y <= geo.h)) return invalid;
+  const mx = pts.reduce((s,p) => s + p.x, 0) / 4, my = pts.reduce((s,p) => s + p.y, 0) / 4;
+  const ring = pts.slice().sort((a,b) => Math.atan2(a.y-my,a.x-mx) - Math.atan2(b.y-my,b.x-mx));
+  const width = (chip.wide - 1) * grid.pitch + grid.size, height = (chip.long - 1) * grid.pitch + grid.size;
+  const target = [[0,0],[width,0],[width,height],[0,height]].map(([x,y]) => [x+grid.x0,y+grid.y0]);
+  const sides = ring.map((p,i) => { const n = ring[(i+1)%4]; return [n.x-p.x,n.y-p.y]; });
+  const lengths = sides.map(v => Math.hypot(...v));
+  if (sides.some(([x,y],i) => { const [u,v] = sides[(i+1)%4]; return x*v-y*u < .2*lengths[i]*lengths[(i+1)%4]; }) ||
+      Math.min(...lengths) < Math.max(8, Math.min(chip.wide,chip.long)*2)) return invalid;
+  const ratio = (lengths[0]+lengths[2])/(lengths[1]+lengths[3]);
+  const parity = Math.abs(Math.log(ratio*width/height)) < Math.abs(Math.log(ratio*height/width)) ? 1 : 0;
+  if (Math.abs(Math.log((parity ? 1/ratio : ratio)*height/width)) > .8) return invalid;
+  // Of the equivalent rotations choose the one with the smallest absolute image rotation.
+  let score = -Infinity, points, a, b;
+  for (let shift = 0; shift < 4; shift++) {
+    if (chip.wide !== chip.long && shift%2 !== parity) continue;
+    const ordered = ring.map((_,i) => ring[(i+shift)%4]);
+    let dot = 0, cross = 0, norm = 0;
+    ordered.forEach((p,i) => {
+      const x = p.x-mx, y = p.y-my, u = target[i][0]-grid.x0-width/2, v = target[i][1]-grid.y0-height/2;
+      dot += x*u+y*v; cross += x*v-y*u; norm += x*x+y*y;
+    });
+    if (dot > score) { score = dot; points = ordered; a = dot/norm; b = cross/norm; }
+  }
+  const th = Array(22).fill(0), sc = Math.hypot(a,b);
+  th[2] = Math.atan2(b,a)*180/Math.PI; th[3] = sc;
+  const dx = mx-geo.w/2, dy = my-geo.h/2;
+  th[4] = grid.x0+width/2-a*dx+b*dy-geo.w*sc/2;
+  th[5] = grid.y0+height/2-b*dx-a*dy-geo.h*sc/2;
+  const fw = afForward(th,geo), basis = [], offsets = [[],[]];
+  points.forEach((p,i) => {
+    const out = []; fw(p.x,p.y,out); const [, ,u,v] = out;
+    basis.push([(1-u)*(1-v),u*(1-v),u*v,(1-u)*v]);
+    offsets[0].push((target[i][0]-out[0])/geo.docW); offsets[1].push((target[i][1]-out[1])/geo.docH);
+  });
+  for (let axis = 0; axis < 2; axis++) {
+    const d = cvSolve(basis, offsets[axis]); if (!d || d.some(v => !Number.isFinite(v))) return invalid;
+    d.forEach((v,i) => th[6+2*i+axis] = v);
+  }
+  return {ok:true, points, target, th, mx, my};
+}
+
 /** The whole analysis. Pure: does not touch app state.
  *  imgEl + imgW/imgH: the source picture. chip: {wide, long}. grid: {x0, y0, pitch, size} of the chip grid on the canvas (px).
  *  doc: {w, h}. lens: {cx, cy}. start: null for a full fit, or {th} = current image settings to refine the DISTORTION ONLY
- *  (tilt, size, position and lens are kept; only the handles and the fine mesh change).
+ *  (tilt, size, position and lens are kept), or {corners} = four unordered source-pixel outer corners.
  *  Returns {ok, reason} or {ok: true, th, mesh, stats}. */
 function afCompute(imgEl, imgW, imgH, chip, grid, doc, lens, start = null) {
+  if (start && 'corners' in start) {
+    const geo = {w: imgW, h: imgH, docW: doc.w, docH: doc.h, cx: lens.cx, cy: lens.cy};
+    const seed = afCornerSeed(start.corners, chip, grid, geo);
+    if (!seed.ok) return seed;
+    if (start.preserveShape) {
+      const th = seed.th.slice();
+      th.fill(0, AF_WARP); // retain only the least-squares similarity from the four clicks
+      return {ok: true, mode: 'shape', th, mesh: null, stats: {refined: false}};
+    }
+    const fit = afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, seed, false);
+    if (fit.ok) return {...fit, mode: 'corners'};
+    return {ok: true, mode: 'corners', th: seed.th, mesh: null, stats: {refined: false}};
+  }
   const first = afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, null);
   // A non-square array may be photographed turned by 90°. Which way round is judged from how far the pattern reaches in each direction;
   // with tissue in the way (or a nearly square array) that can be wrong, so the other way round is tried too and the better fit kept.
@@ -139,9 +235,17 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
   const feature = gr => { const a = new Float32Array(w * h); for (let i = 0; i < a.length; i++) a[i] = Math.abs(gr[i]); const bg = cvBlur(a, w, h, Math.max(8, .6 * maxPitch)); for (let i = 0; i < a.length; i++) a[i] -= bg[i]; return a; };
   // The well PITCH is searched in three pictures at once: the two edge-strength images and the brightness itself. Edges are strong for
   // wide wells with thin walls, brightness for wells about as wide as the walls (and for faint wells under tissue), so every chip shows up.
-  const flat = (() => { const bg = cvBlur(g, w, h, Math.max(8, .6 * maxPitch)), o = new Float32Array(w * h); for (let i = 0; i < o.length; i++) o[i] = g[i] - bg[i]; return o; })();
-  const pk = cvLatticePeaks([feature(gx), feature(gy), flat], w, h, 1 / maxPitch, Math.min(.25, 2 * Math.max(chip.wide, chip.long) / (.15 * Math.min(w, h))));
-  if (pk) { pk.f1 = {x: pk.f1.x * q, y: pk.f1.y * q}; pk.f2 = {x: pk.f2.x * q, y: pk.f2.y * q}; }       // lattice period = pitch / q
+  const clicks = start && start.points;
+  const flat = clicks ? null : (() => { const bg = cvBlur(g, w, h, Math.max(8, .6 * maxPitch)), o = new Float32Array(w * h); for (let i = 0; i < o.length; i++) o[i] = g[i] - bg[i]; return o; })();
+  // The Jacobian at the array centre gives the two carrier frequencies in working-image pixels.
+  const predicted = () => {
+    const fw = afForward(start.th, geo), c = [], x = [], y = [];
+    fw(start.mx, start.my, c); fw(start.mx+1, start.my, x); fw(start.mx, start.my+1, y);
+    const f = axis => ({x:(x[axis]-c[axis])/(P*ws), y:(y[axis]-c[axis])/(P*ws)});
+    return {f1:f(0), f2:f(1)};
+  };
+  const pk = clicks ? predicted() : cvLatticePeaks([feature(gx), feature(gy), flat], w, h, 1 / maxPitch, Math.min(.25, 2 * Math.max(chip.wide, chip.long) / (.15 * Math.min(w, h))));
+  if (pk && !clicks) { pk.f1 = {x: pk.f1.x * q, y: pk.f1.y * q}; pk.f2 = {x: pk.f2.x * q, y: pk.f2.y * q}; }       // lattice period = pitch / q
   if (!pk || pk.strength < AF.minStrength) return {ok: false, reason: 'No regular grid of wells was found in the picture.'};
 
   /* 2 + 3. local phase of each wall direction on a coarse grid, unwrapped into a consistent line index K */
@@ -156,25 +260,31 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
     cw = fam[0].cw; ch = fam[0].ch; nc = cw * ch; xw = new Float32Array(nc); yw = new Float32Array(nc);
     for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) { xw[j * cw + i] = i * step + (step >> 1); yw[j * cw + i] = j * step + (step >> 1); }
     // Combine the two measurements into one phasor per wall direction.
-    // 1. Calibrate the linear phasor: its phase difference to the edge phasor (0 = bright walls, half a period = bright wells, plus a
-    //    little from shading) is measured where the edges are crisp and carried into the areas where only the linear signal survives:
-    //    a local average dominates where it has evidence, a wide one and the whole-picture one take over further away.
+    // 1. Calibrate the linear phasor separately for each wall direction: oblique lighting and deep-well parallax can shift edge vs
+    //    brightness phase differently along X and Y, and sharing one polarity across both axes can create a phase vortex when polarity
+    //    reverses across a tissue or liquid boundary. Weighting the linear term by local polarity coherence (coh²) also mutes it where
+    //    contrast flips sign (and the blurred cross-correlation cancels toward zero), so it never fights the crisp edge phasor.
     // 2. Add both, each in units of its own noise floor and weighted by its signal-to-noise: crisp wells are placed by their edges
     //    (as sharp as it gets), faint wells under tissue by the linear signal.
-    { const cr = new Float32Array(nc), ci = new Float32Array(nc), sp = pitchW / step; let gr = 0, gi = 0, gn = 0;
-      for (const F of fam) for (let i = 0; i < nc; i++) { const r = F.ere[i] * F.re[i] + F.eim[i] * F.im[i], m = F.eim[i] * F.re[i] - F.ere[i] * F.im[i]; cr[i] += r; ci[i] += m; gr += r; gi += m; gn += Math.hypot(r, m); }
-      const r1 = cvBlur(cr, cw, ch, 3 * sp), i1 = cvBlur(ci, cw, ch, 3 * sp), r2 = cvBlur(cr, cw, ch, 12 * sp), i2 = cvBlur(ci, cw, ch, 12 * sp);
-      polarity = [Math.atan2(gi, gr) / (2 * Math.PI), Math.hypot(gr, gi) / (gn + 1e-12)]; gr /= nc; gi /= nc;
+    { const sp = pitchW / step; let grAll = 0, giAll = 0, gnAll = 0;
       for (const F of fam) {
+        const cr = new Float32Array(nc), ci = new Float32Array(nc), cm = new Float32Array(nc); let gr = 0, gi = 0, gn = 0;
+        for (let i = 0; i < nc; i++) { const r = F.ere[i] * F.re[i] + F.eim[i] * F.im[i], m = F.eim[i] * F.re[i] - F.ere[i] * F.im[i], mag = Math.hypot(r, m); cr[i] = r; ci[i] = m; cm[i] = mag; gr += r; gi += m; gn += mag; }
+        grAll += gr; giAll += gi; gnAll += gn;
+        const r1 = cvBlur(cr, cw, ch, 3 * sp), i1 = cvBlur(ci, cw, ch, 3 * sp), m1 = cvBlur(cm, cw, ch, 3 * sp);
+        const r2 = cvBlur(cr, cw, ch, 12 * sp), i2 = cvBlur(ci, cw, ch, 12 * sp), m2 = cvBlur(cm, cw, ch, 12 * sp);
+        gr /= nc; gi /= nc; const gm = gn / nc;
         const ea = new Float32Array(nc); for (let i = 0; i < nc; i++) ea[i] = Math.hypot(F.ere[i], F.eim[i]);
         const ne = afPercentile(subsample(Array.from(ea), 4000), 10) + 1e-9, nl = afPercentile(subsample(Array.from(F.amp), 4000), 10) + 1e-9;
         for (let i = 0; i < nc; i++) {
           const x = r1[i] + .2 * r2[i] + .02 * gr, y = i1[i] + .2 * i2[i] + .02 * gi, n = Math.hypot(x, y) || 1, c = x / n, s_ = y / n;
-          const se = ea[i] / ne, sl = F.amp[i] / nl, we = AF.edgePreference * se / ne, wl = sl / nl;          // weight = SNR, phasor / noise
+          const coh = Math.min(1, n / (m1[i] + .2 * m2[i] + .02 * gm + 1e-12));
+          const se = ea[i] / ne, sl = F.amp[i] / nl, we = AF.edgePreference * se / ne, wl = sl / nl * coh * coh;          // weight = SNR, phasor / noise
           const a = F.re[i], b = F.im[i]; F.re[i] = we * F.ere[i] + wl * (a * c - b * s_); F.im[i] = we * F.eim[i] + wl * (a * s_ + b * c);
           F.amp[i] = Math.hypot(F.re[i], F.im[i]);
         }
       }
+      polarity = [Math.atan2(giAll, grAll) / (2 * Math.PI), Math.hypot(grAll, giAll) / (gnAll + 1e-12)];
     }
     // "Is the well lattice here?" = is the phase orderly (noise has random phase)? Unlike the amplitude this does not depend on contrast,
     // so faint wells under tissue count like bare ones, and a bright stripe (one direction only) does not count. Orderly means: the phase
@@ -221,11 +331,11 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
   let ratio = periodsRatio(); dbg.firstRatio = ratio; dbg.firstExtents = [fam[0].extent, fam[1].extent];
   // More periods than the chip has → the period is half of what it should be. Fewer is normal when tissue hides part of the array, so the
   // period is only doubled when the array could not fit in the picture otherwise.
-  if (ratio > 1.45 && ratio < 2.7) { if (!analyse({x: pk.f1.x / 2, y: pk.f1.y / 2}, {x: pk.f2.x / 2, y: pk.f2.y / 2})) return tooSmall; decideTurn(); ratio = periodsRatio(); }
-  else if (ratio < .68 && sizeFrac() > AF.maxArrayFrac) { if (!analyse({x: pk.f1.x * 2, y: pk.f1.y * 2}, {x: pk.f2.x * 2, y: pk.f2.y * 2})) return tooSmall; decideTurn(); ratio = periodsRatio(); }
+  if (!clicks && ratio > 1.45 && ratio < 2.7) { if (!analyse({x: pk.f1.x / 2, y: pk.f1.y / 2}, {x: pk.f2.x / 2, y: pk.f2.y / 2})) return tooSmall; decideTurn(); ratio = periodsRatio(); }
+  else if (!clicks && ratio < .68 && sizeFrac() > AF.maxArrayFrac) { if (!analyse({x: pk.f1.x * 2, y: pk.f1.y * 2}, {x: pk.f2.x * 2, y: pk.f2.y * 2})) return tooSmall; decideTurn(); ratio = periodsRatio(); }
   const wrongChip = {ok: false, reason: `The well pattern in the picture does not match this chip version (${chip.wide} × ${chip.long} wells). Is the right version ticked, and is the whole array in the picture?`};
   dbg.sizeFrac = sizeFrac();
-  if (ratio > 1.4 || sizeFrac() > AF.maxArrayFrac) return wrongChip;
+  if (!clicks && (ratio > 1.4 || sizeFrac() > AF.maxArrayFrac)) return wrongChip;
   if (ratio < AF.minVisible) return {ok: false, reason: 'Too little of the well pattern is visible to line it up.'};
   Object.assign(dbg, {ratio, turned, extents: [fam[0].extent, fam[1].extent], f: [fam[0].f, fam[1].f], pitchW});
   const axes = turned ? [{F: fam[1], sign: -1}, {F: fam[0], sign: 1}] : [{F: fam[0], sign: 1}, {F: fam[1], sign: 1}];   // canvas X, canvas Y
@@ -378,7 +488,43 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
     return roi.length >= 300;
   };
   const notLocated = {ok: false, reason: 'The well array could not be located in the picture.'};
-  if (start) {
+  const warnings = [], allowed = clicks && clicks.map(() => [0,0]);
+  if (clicks) {
+    if (seed[0].length < AF.minSeed) return notLocated;
+    // Fit the measured patch in its own numbering, then anchor its arbitrary integer origin at the clicks.
+    for (let axis = 0; axis < 2; axis++) {
+      const l = lattice(th, seed[axis], axis);
+      koff[axis] = Math.round(afPercentile(seed[axis].map((i,n) => axes[axis].F.K[i]-l[n]), 50));
+    }
+    const free = [AF_K1, ...corners];
+    fit(free, residSeed, .1);
+    if (!th.every(Number.isFinite) || Math.abs(th[AF_K1]) > 1) return notLocated;
+    const fw = afForward(th, geo);
+    const errors = clicks.map((p,i) => { fw(p.x,p.y,tmp); return start.target[i].map((v,k) => (tmp[k]-v)/P); });
+    if (errors.some(e => e.some(v => !Number.isFinite(v)))) return notLocated;
+    const edge = findOffsets();
+    for (let axis = 0; axis < 2; axis++) {
+      const sorted = errors.map(e => e[axis]).sort((a,b) => a-b);
+      // A half-period edge lattice has two possible parities. Use all four outer edges as anchors.
+      let origin = Math.round((sorted[1]+sorted[2])/2);
+      const delta = errors.map(e => (e[axis]-edge[axis])/q);
+      const pairs = axis ? [[0,1],[2,3]] : [[0,3],[1,2]];
+      const consistentSides = pairs.every(([a,b]) => Math.round(delta[a]) === Math.round(delta[b]));
+      if (consistentSides && edgeSure[axis] >= AF.minEdgeSure && delta.every(v => Math.abs(v) < 1.4) &&
+          delta.some(v => Math.abs(Math.abs(v)-1) < .35) && delta.every(v => Math.abs(v-Math.round(v)) < .4)) {
+        origin = edge[axis];
+        const names = axis ? ['top','top','bottom','bottom'] : ['left','right','right','left'];
+        const moved = [];
+        delta.forEach((v,i) => { allowed[i][axis] = Math.round(v); if (allowed[i][axis]) moved.push(names[i]); });
+        warnings.push('Moved one well at the ' + [...new Set(moved)].join(' and ') + ' edge: check that side.');
+      }
+      koff[axis] += origin;
+    }
+    fit(free, residSeed, .1);
+    if (!buildRoi()) return notLocated;
+    fit(free, residWrapped, .08);
+    fit([...free,...bows], residWrapped, .08);
+  } else if (start) {
     // Distortion only. The user's placement decides which wall is which: the typical offset between the absolute (unwrapped) line
     // indices and the current model must be close to a whole number, otherwise the picture is not on the grid yet.
     const notAligned = {ok: false, reason: 'The image is not roughly lined up with the grid yet. Run Auto-fit first (or line it up by hand), then fix the distortion.'};
@@ -437,11 +583,20 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
   }
   geo.mesh = mesh;
   if (mesh && afPercentile(absErrors(), 50) > handlesOnly) { mesh = null; geo.mesh = null; }      // never keep a mesh that made things worse
+  const cornersInRange = () => {
+    const fw = afForward(th, geo);
+    return clicks.every((p,i) => {
+      fw(p.x, p.y, tmp);
+      return Math.hypot(...start.target[i].map((v,k) => (tmp[k]-v)/grid.pitch-allowed[i][k])) <= AF.maxClickMotion;
+    });
+  };
+  // At a covered corner the mesh extrapolates. Keep the measured handle fit if the mesh strays past the click.
+  if (clicks && mesh && !cornersInRange()) { mesh = null; geo.mesh = null; }
   const meshShiftPx = mesh ? Math.max(...mesh.d.map((v, k) => Math.abs(v) * dims[k % 2])) : 0;
   if (mesh && meshShiftPx < .02 * P) { mesh = null; geo.mesh = null; }                             // nothing to correct
 
   const off = findOffsets(); dbg.offsets.push(off);                 // final check of the array's edges with the finished model (also measures edgeSure and the spill)
-  if (start) {                                                     // distortion only: the user's placement chose the wall numbering — verify it against the array's real edges
+  if (start && !clicks) {                                          // distortion only: the user's placement chose the wall numbering — verify it against the array's real edges
     if ((off[0] && edgeSure[0] >= AF.minEdgeSure) || (off[1] && edgeSure[1] >= AF.minEdgeSure)) return {ok: false, reason: `The image is placed about ${Math.max(Math.abs(off[0]), Math.abs(off[1])) / q} well(s) away from where the array belongs on the grid. Run Auto-fit (or move the image) first, then fix the distortion.`};
   }
 
@@ -470,9 +625,17 @@ function afComputeOnce(imgEl, imgW, imgH, chip, grid, doc, lens, start, forceTur
   })();
   const stats = {visible: seen.visible, hiddenCorners: seen.hiddenCorners, medianPitch: median, medianImagePx: median * pitchW / ws, medianWell: median / q, inliers, pitchImagePx: q * pitchW / ws, harmonic: q, medianHandlesOnly: handlesOnly, meshShiftPx, sideErr, tiltDeg: th[AF_ROT], turned, strength: pk.strength,
                  spill, edgeSure: edgeSure.slice(), samples: roi.length, workSize: [w, h], ms: Math.round(performance.now() - t0), firstWall: koff.slice(), distortionOnly: !!start};
+  if (clicks) {
+    if (seen.visible < AF.minVisible || !cornersInRange()) return notLocated;
+    Object.assign(stats, {refined:true, warnings, distortionOnly:false});
+  }
   if (Math.max(...spill) > AF.maxSpill) return {...wrongChip, stats};
   if (Math.max(...Object.values(sideErr).filter(Number.isFinite), 0) > AF.maxSideError)
     return {ok: false, reason: 'The visible wells near an array edge could not be lined up reliably. Try a clearer photo or align the image by hand.', stats};
   if (median > AF.maxMedianError || inliers < AF.minInliers) return {ok: false, reason: `The wells were found but could not be lined up reliably (typical error ${(median / q * 100).toFixed(0)}% of a well).`, stats};
+  const baseline = start ? start.th : th.map((v,i) => i >= AF_ROT && i <= AF_Y ? v : 0);
+  const before = afForward(baseline, {...geo, mesh: start?.mesh || null});
+  if (afBendsWalls(roi, axes, label, cw, xw, yw, ws, pitchW/ws, grid, chip, before, afForward(th,geo)))
+    return {ok:false, reason:'The correction would bend visible rows or columns. Try Pick 4 corners to guide the alignment.', stats};
   return {ok: true, th, mesh, stats};
 }

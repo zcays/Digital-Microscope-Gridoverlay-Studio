@@ -41,6 +41,7 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `crop.js` | Crop tool: selection maths, canvas→image rect conversion, apply / undo / reset, crop box, its drag types; "Crop to array" (`updateArrayMask`, `setArrayOnly`) | change cropping |
 | `cv.js` | Vision toolbox with no app state: blur, gradients, FFT, lattice peak finder, phase demodulation, phase unwrapping, robust least squares | reuse or improve a vision step |
 | `autofit.js` | Auto-fit ANALYSIS (pure): finds the well lattice in the photo and fits the image model to the chip grid (`afCompute`, `afForward`, thresholds `AF`) | change how auto-fit decides |
+| `corners.js` | Pick 4 corners tool: markers in source px, loupe, `canvasToSourcePoint` / `sourceToCanvasPoint`, hands the corners to `afRunCorners` | change corner picking |
 | `autofit-app.js` | Auto-fit in the app: run on the loaded image, apply to `S`, one-step undo, result messages (`autoFit`, `autoFitNow`, `undoAutoFit`, `afMessage`) | change what the buttons do or say |
 | `ui.js` | Widget helpers: `slider`, `checkbox`, `buttons`, `line`, `note`, `setter`, `KEY_STEP` | add a new kind of control |
 | `panels.js` | Builds the right-hand panels from the widgets | add a slider / setting |
@@ -52,6 +53,10 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 
 Other files: `chips.js` (packaged user-editable chip table `BUILTIN_CHIPS`, next to `index.html`), `index.html` (markup, panel containers, help overlay, script order), `css/style.css`,
 `tests.html` (self-test page), `../README.md` (user-facing), `../AGENTS.md` (short rules for AI agents).
+
+## Presentation
+
+`css/style.css` owns layered dark chrome: cyan `#58D8F5` actions, selection, slider fill and keyboard focus; inset fields and separate panel levels. Toolbar groups and the empty-state inline SVG live in `index.html`. The image work surface remains neutral and unfiltered; canvas, grid, crop and warp styling is independent of the chrome accent. System fonts and local assets keep `file://` support.
 
 ## Concepts you must know
 
@@ -98,14 +103,11 @@ and mask in the corrected-image space, so the crop never changes `S.doc`, the gr
 the image afterwards. With distortion handles or a fine mesh the drawn box is not exactly a rectangle in the image: the closest
 rectangle is used (edges can be off by the size of the distortion, typically a few px). Non-destructive: Reset crop / Undo restore it.
 
-**Crop to array** (`S.chip.arrayOnly`; checkbox in the Crop panel and "array only" next to Export) is a preset, not a hand-drawn crop. It is
-tied to the GRID, not to the image: `arrayRect()` (grid.js) is the array's outer edge on the canvas — every well plus half a wall all
-round, i.e. `wide × long` whole pitches — and `arrayCropRect()` is that rectangle in whole canvas pixels. While it is on,
-`updateArrayMask()` (crop.js) hides the picture outside it with a CSS `clip-path` on the image canvas (same for both renderers, no image setting
-changes) and `buildExportCanvas()` cuts the PNG to exactly that rectangle (file name `array-<chip>.png`). It needs a ticked chip with
-"Fit canvas to array" (otherwise the array has no definite place and the controls are disabled). The edges are rounded to whole pixels, so
-they are within half a canvas pixel of the true outer edge (the canvas border is never less than half a wall, so the edge is always on the
-canvas unless Offset X/Y pushes it off; the panel text says so when that happens). Unticking the chip or "Fit canvas to array" switches it off. `S.img.crop`, `S.doc` and the grid are not touched.
+**Crop to array** (`S.chip.arrayOnly`; checkbox in the Crop panel and "array only" next to Export) is a preset tied to the GRID, not a hand-drawn crop. `arrayRect()` (grid.js) is the outer edges of the N × M wells plus the margin `S.chip.arrayPad` (`'halfWell'` default, `'halfWall'`, `'none'`); `arrayCropRect()` is that rectangle in whole canvas px. While on, `updateArrayMask()` (crop.js) hides the picture outside it with a CSS `clip-path` on the image canvas (both renderers, no image setting changes) and `buildExportCanvas()` cuts every export (image + grid, image only, grid only) to it (`array-<chip>.png`; pass `array: false` for the whole canvas). `afterAutoFit(res)` (crop.js) is called by autofit-app.js after a successful Auto-fit or corner fit and switches it on when `S.chip.cropAfterFit` (default true); the auto-fit undo snapshot includes `arrayOnly`. The fit-mode canvas border is never less than half a well or half a wall, so the margin is on the canvas unless Offset X/Y pushes it off. Settings files store `arrayPad` / `cropAfterFit`; older files without them load as `'halfWall'` / `true`. Needs a ticked chip with "Fit canvas to array".
+
+**Pick 4 corners (corner-assisted Auto-fit).** `corners.js` registers `TOOLS.corners` (`P`, the toolbox button, "Pick 4 corners…" in the Chip version panel). Markers are stored in SOURCE image px and re-projected every frame with `sourceToCanvasPoint()` (`afForward(afCurrent(), geo)`, honouring `S.lens.bypass` and `S.warp.enabled`); clicks are converted with `canvasToSourcePoint()` (numerical inverse). Picking never changes an image setting; a new image or chip clears the markers. Enter calls `afRunCorners(pts, onDone)` (autofit-app.js) → `autoFitFromCorners(pts)` → the corner mode of `afCompute`: the four outer well corners are ordered (orientation of non-square chips from the side lengths), a similarity and then the 8 distortion handles are fitted to them, the lattice frequencies are predicted from that seed (no harmonic guessing), and the WALL NUMBERING comes from the corners. The edge check may move one side by exactly one well only with strong evidence at both ends of that side (reported to the user). Lens, handles, bows and the fine mesh are then refined on the visible wells; if that fails its quality checks or moves a clicked corner too far, the corner-only fit is applied with `stats.refined = false` and the message says so.
+
+**Preserve shape** in the four-corner toolbar takes the least-squares rotation, uniform scale and translation from the four markers. It clears lens and warp corrections and uses the same crop and undo paths as a corner fit.
 
 **Auto-fit (computer vision, `autofit.js` + `cv.js`).** One button sets `S.lens.k1`, `S.img` (rot/scale/x/y) and `S.warp` so the photo
 matches the ticked chip's grid. Steps, in order:
@@ -114,7 +116,7 @@ matches the ticked chip's grid. Steps, in order:
 2. *Phase.* Complex demodulation of `|gradient along f|` gives, per pixel, "line index mod 1" for each wall direction. Using the
    gradient magnitude makes dark and bright walls equivalent. Chips whose well is ~half the pitch (V7.0, V15.2) have edge patterns
    that repeat at HALF the pitch, sitting on the well edges, so they are fitted with `q = 2` (twice the lines, different origin).
-3. *Visibility and unwrap.* Combine brightness and edge phasors with local polarity; phase-step coherence locates visible patches independently of their brightness. Unwrap each connected patch, fit the strongest patch, and join other patches only when their wall-number offset agrees with the model. *Unwrap* (quality-guided flood fill) → absolute line indices over the strong area. The number of periods the pattern spans is
+3. *Visibility and unwrap.* Combine brightness and edge phasors with per-axis local polarity calibration gated by polarity coherence (`coh²`, so contrast reversals and oblique X/Y shading cannot form phase vortices); phase-step coherence locates visible patches independently of their brightness. Unwrap each connected patch, fit the strongest patch, and join other patches only when their wall-number offset agrees with the model. *Unwrap* (quality-guided flood fill) → absolute line indices over the strong area. The number of periods the pattern spans is
    compared with the chip's well count to fix a wrong harmonic and to detect a 90°-turned non-square chip.
 4. *Coarse fit on the unwrapped samples:* tilt/scale/position → + lens `k1` → distortion corners with tilt/scale FROZEN. Fitting
    tilt/scale together with the corners is degenerate (a huge tilt cancelled by huge corner moves), so they are never free together.
@@ -130,6 +132,8 @@ matches the ticked chip's grid. Steps, in order:
    Stiffness / passes / maximum shift are `AF.meshSmooth`, `AF.meshPasses`, `AF.meshMaxShift`.
 8. *Refuse rather than guess:* median error > 10% of a period, < 75% of samples matched, or the well pattern continuing beyond the
    fitted array (> 55% of the inside level = more wells than the ticked chip) → nothing is changed and the user gets the reason.
+Before accepting a nonlinear fit, `afBendsWalls` estimates local wall tangents from phase differences inside connected visible patches. In each supported region it compares their projected tilt with the simpler alignment (or the starting distortion for a distortion-only fit). A median increase above `AF.maxAddedTilt` in either direction rejects the refinement.
+
 **Auto-fix distortion** (`autoFixDistortion()`, Distort panel) runs the same analysis with `start = {th: current settings}`: tilt, scale,
 position and lens are frozen; the wall numbering is taken from where the user put the image (the typical offset to the absolute line
 indices must be close to a whole number), the handles and a first mesh are fitted from the absolute indices (so a bulge larger than half

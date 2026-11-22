@@ -16,6 +16,7 @@ function settingsSnapshot() {
     image: I.el ? {name: I.name, width: I.w, height: I.h} : null,
     canvas: {...S.doc},
     chip: {id: C.id, fit: C.fit, margin: C.margin, arrayOnly: C.arrayOnly,
+      arrayPad: C.arrayPad, cropAfterFit: C.cropAfterFit,
       savedDoc: C.savedDoc ? {...C.savedDoc} : null, definition: activePreset() ? settingsCopy(activePreset()) : null},
     img: {x: I.x, y: I.y, scale: I.scale, rot: I.rot, crop: I.crop ? {...I.crop, rot: I.crop.rot || 0} : null},
     lens: {...S.lens}, warp: settingsCopy(S.warp), grid: {...S.grid}, ratio: S.ratio,
@@ -71,8 +72,12 @@ function validateSettings(raw) {
     if (checked.errors.length || !checked.chips.length) fail(checked.errors[0] || 'The saved chip details are not valid.');
     definition = checked.chips[0];
   } else if (c.definition !== null) fail('Chip details need a chip name.');
+  const ARRAY_PADS = ['halfWell', 'halfWall', 'none'];
   const chip = {id, fit: bool(c.fit, 'Fit canvas to array'), margin: clamp(number(c.margin, 'Dead room'), 0, 40),
-    arrayOnly: bool(c.arrayOnly, 'Crop to array'), savedDoc: c.savedDoc === null ? null : canvas(c.savedDoc, 'Previous canvas'), definition};
+    arrayOnly: bool(c.arrayOnly, 'Crop to array'),
+    arrayPad: c.arrayPad === undefined ? 'halfWall' : choice(c.arrayPad, ARRAY_PADS, 'Space around the array'),
+    cropAfterFit: c.cropAfterFit === undefined ? true : bool(c.cropAfterFit, 'Crop to array after Auto-fit'),
+    savedDoc: c.savedDoc === null ? null : canvas(c.savedDoc, 'Previous canvas'), definition};
   if (chip.arrayOnly && (!id || !chip.fit)) fail('“Crop to array” needs a ticked chip with “Fit canvas to array”.');
   const i = object(raw.img, 'Image settings'), l = object(raw.lens, 'Lens settings'), w = object(raw.warp, 'Distortion settings');
   // Limits here are sanity bounds, deliberately wider than the sliders: Auto-fit and typed values may legitimately go beyond a slider's
@@ -134,7 +139,7 @@ function applySettings(raw) {
   // Presets may resize the canvas and rescale the image. Restore the exact saved values AFTER that work.
   keepingImageScale(() => Object.assign(S.chip, {id: s.chip.id, fit: s.chip.fit, margin: s.chip.margin}));
   Object.assign(S.doc, s.canvas);
-  Object.assign(S.chip, {savedDoc: s.chip.savedDoc, arrayOnly: s.chip.arrayOnly});
+  Object.assign(S.chip, {savedDoc: s.chip.savedDoc, arrayOnly: s.chip.arrayOnly, arrayPad: s.chip.arrayPad, cropAfterFit: s.chip.cropAfterFit});
   Object.assign(S.img, s.img); Object.assign(S.lens, s.lens); Object.assign(S.warp, s.warp); Object.assign(S.grid, s.grid);
   S.ratio = s.ratio; S.crop = null; undoStack.length = 0; afUndoState = null;
   $('#exImg').checked = s.export.image; $('#exGrid').checked = s.export.grid;

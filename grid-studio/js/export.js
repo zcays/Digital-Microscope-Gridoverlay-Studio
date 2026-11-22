@@ -3,8 +3,8 @@
  *   1. the image layer (re-rendered at full quality by render.js so lens correction, distortion and crop are included), then
  *   2. the grid drawn on top (grid.js, k = 1).
  * The checkboxes #exImg / #exGrid choose the layers. Normally the result is exactly S.doc.w × S.doc.h px.
- * With "Crop to array" on (S.chip.arrayOnly, a chip ticked and fitted) the PNG is cut to exactly the array's outer edge — all wells plus
- * half a wall all round, nothing more — rounded to whole pixels (see arrayCropRect() in grid.js). Pass array: false to get the whole canvas.
+ * With "Crop to array" on (S.chip.arrayOnly, a chip ticked and fitted) the PNG is cut to the array plus the chosen margin
+ * (S.chip.arrayPad: half a well, half a wall, or none), rounded to whole pixels (see arrayCropRect() in grid.js). Pass array: false to get the whole canvas.
  * History: drawGrid() used to clear its canvas first, which erased the image and exported only the grid — it no longer clears. */
 
 function buildExportCanvas({image = $('#exImg').checked, grid = $('#exGrid').checked, array = true} = {}) {
