@@ -39,7 +39,7 @@ Both tools run completely offline on your computer with a bundled Electron runti
 
 ## Quick Download & Install
 
-The published 1.0.3 installers use the former name **SurveyApps!**. Downloads are available on the **[GitHub Releases](https://github.com/zcays/SurveyApps/releases)** page (and produced by the [Build SUGAR workflow](.github/workflows/build-surveyapps.yml)).
+The published 1.0.3 installers use the former name **SurveyApps!**. Downloads are available on the **[GitHub Releases](https://github.com/zcays/sugar/releases)** page (and produced by the [Build SUGAR workflow](.github/workflows/build-surveyapps.yml)).
 
 | Platform | Recommended Download | Portable Alternative | Requirements |
 |---|---|---|---|
@@ -107,8 +107,8 @@ End users do **not** need Python or Node.js. Developers building from source nee
 ### Setup & Run Locally
 
 ```bash
-git clone https://github.com/zcays/SurveyApps.git
-cd SurveyApps
+git clone https://github.com/zcays/sugar.git
+cd sugar
 
 # 1. Python environment & frozen backend
 python3 -m venv .venv
@@ -172,7 +172,7 @@ See **[docs/VALIDATION.md](docs/VALIDATION.md)** for complete test evidence and 
 ## Project Structure & Documentation
 
 ```text
-SurveyApps/
+sugar/
 ├── .github/workflows/build-surveyapps.yml  # Cross-platform macOS (arm64/x64) & Windows (x64) CI build
 ├── assets/                                 # SVG master + 1024/2048 PNG + ICNS + ICO icons
 ├── backend/                                # Python FastAPI/Flask/Dash server & Fluorescence Lab runtime

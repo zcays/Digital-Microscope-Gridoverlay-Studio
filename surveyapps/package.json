@@ -5,13 +5,13 @@
   "private": true,
   "description": "SUGAR (Super Ultra Gridding Arrays Repo) — offline microscopy alignment and fluorescence analysis",
   "author": "zcays",
-  "homepage": "https://github.com/zcays/SurveyApps",
+  "homepage": "https://github.com/zcays/sugar",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zcays/SurveyApps.git"
+    "url": "https://github.com/zcays/sugar.git"
   },
   "bugs": {
-    "url": "https://github.com/zcays/SurveyApps/issues"
+    "url": "https://github.com/zcays/sugar/issues"
   },
   "main": "desktop/main.cjs",
   "scripts": {
