@@ -51,6 +51,32 @@ const PYTHON_BIN = fs.existsSync(path.join(SURVEYAPPS_DIR, '.venv/bin/python'))
 
 const isPackaged = process.argv.includes('--packaged');
 
+async function runEmbeddedSuite(page, resource, {outputId = 'out', timeout = 120000} = {}) {
+  const url = 'surveyapps://app/' + resource;
+  const handle = await page.evaluateHandle(src => {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:960px;height:640px;left:-9999px;top:0;border:0;';
+    iframe.src = src;
+    document.body.appendChild(iframe);
+    return iframe;
+  }, url);
+  try {
+    const frame = await handle.asElement().contentFrame();
+    await frame.waitForFunction(() => /^(PASS$|FAIL)/.test(document.title), null, {timeout});
+    const result = await frame.evaluate(id => ({
+      title: document.title,
+      text: document.getElementById(id).innerText,
+      bench1M: window.__bench1M || null,
+    }), outputId);
+    assert.equal(result.title, 'PASS', resource + '\n' + result.text);
+    return result;
+  } finally {
+    await handle.evaluate(iframe => iframe.remove());
+    await handle.dispose();
+  }
+}
+
+
 function resolvePackagedExecutable() {
   if (process.env.SURVEYAPPS_TEST_EXECUTABLE) return process.env.SURVEYAPPS_TEST_EXECUTABLE;
   const candidates = [
@@ -306,6 +332,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     assert.equal(bridgeStatus?.state, 'ready', `Backend did not reach ready state: ${JSON.stringify(bridgeStatus)}`);
     assert.ok(bridgeStatus.microscopyUrl.startsWith('http://127.0.0.1:'), 'microscopyUrl must be loopback');
     assert.equal(bridgeStatus.gridUrl, 'surveyapps://app/vendor/grid-studio/index.html');
+    assert.equal(bridgeStatus.segmentUrl, 'surveyapps://app/segment/index.html');
     recordCheck('Dashboard preload bridge and local Python backend ready', {
       version: bridgeStatus.version,
       startupMs: Date.now() - readyStart,
@@ -758,53 +785,16 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     // 4. Packaged / Custom Protocol Grid Studio Self-Test Suite (tests.html -> all PASS)
     // -------------------------------------------------------------------------
     allowExpectedErrorWindow = true; // tests.html probes optional samples/photo1.jpg (404 expected & skipped)
-    const gridSelfTestResult = await page.evaluate(async () => {
-      return await new Promise((resolve, reject) => {
-        const qaFrame = document.createElement('iframe');
-        qaFrame.id = 'qa-grid-tests-frame';
-        qaFrame.style.cssText = 'position:fixed;width:640px;height:480px;left:-9999px;top:0;border:0;';
-        qaFrame.src = 'surveyapps://app/vendor/grid-studio/tests.html';
-        document.body.appendChild(qaFrame);
-
-        const timeout = setTimeout(() => {
-          qaFrame.remove();
-          reject(new Error('Timed out waiting for surveyapps://app/vendor/grid-studio/tests.html'));
-        }, 600000);
-
-        const poll = setInterval(() => {
-          try {
-            const doc = qaFrame.contentDocument;
-            if (!doc) return;
-            if (doc.title === 'PASS' || doc.title.startsWith('FAIL')) {
-              clearInterval(poll);
-              clearTimeout(timeout);
-              const outText = doc.getElementById('out') ? doc.getElementById('out').innerText : '';
-              const title = doc.title;
-              qaFrame.remove();
-              resolve({ title, summary: outText.split('\n')[0] || '', fullText: outText });
-            }
-          } catch (err) {
-            clearInterval(poll);
-            clearTimeout(timeout);
-            qaFrame.remove();
-            reject(err);
-          }
-        }, 250);
-      });
-    });
+    const gridSelfTestResult = await runEmbeddedSuite(page, 'vendor/grid-studio/tests.html', {timeout: 600000});
     allowExpectedErrorWindow = false;
-    assert.equal(
-      gridSelfTestResult.title,
-      'PASS',
-      `Grid Studio embedded tests.html did not PASS: ${gridSelfTestResult.summary}`
-    );
+    const gridSummary = gridSelfTestResult.text.split('\n')[0];
     assert.ok(
-      /^(\d+) \/ \1 passed/.test(gridSelfTestResult.summary),
-      `Expected all available Grid Studio checks to pass, got: ${gridSelfTestResult.summary}`
+      /^(\d+) \/ \1 passed/.test(gridSummary),
+      `Expected all available Grid Studio checks to pass, got: ${gridSummary}`
     );
     recordCheck('Grid Studio self-test suite via surveyapps://app/vendor/grid-studio/tests.html', {
-      summary: gridSelfTestResult.summary,
-      skips: gridSelfTestResult.fullText.split("\n").filter(line => /skipped|unavailable/i.test(line)),
+      summary: gridSummary,
+      skips: gridSelfTestResult.text.split("\n").filter(line => /skipped|unavailable/i.test(line)),
     });
 
     // -------------------------------------------------------------------------
@@ -1113,6 +1103,146 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     });
 
     // -------------------------------------------------------------------------
+    // 5.5 Segment: sample load, ROI paint/flood/undo/redo, native CSV/summary/session exports, & self-tests
+    // -------------------------------------------------------------------------
+    await page.locator('[data-nav="segment"]').click();
+    const segFrame = page.frameLocator('#frame-segment');
+    await segFrame.locator('#sampleBtn').waitFor({ state: 'visible', timeout: 15000 });
+    await segFrame.locator('#hint').waitFor({ state: 'visible' });
+    const segPageFrame = () => {
+      const f = page.frames().find(fr => fr.url().includes('/segment/index.html'));
+      assert.ok(f, 'Segment frame not found');
+      return f;
+    };
+
+    // Verify clicking empty #hint opens #fileInput
+    const segHintClickOk = await segPageFrame().evaluate(() => {
+      let clicks = 0;
+      const fileIn = document.getElementById('fileInput');
+      const hint = document.getElementById('hint');
+      const orig = fileIn.click;
+      fileIn.click = () => { clicks++; };
+      try {
+        hint.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+        return clicks === 1 && getComputedStyle(hint).cursor === 'pointer';
+      } finally {
+        fileIn.click = orig;
+      }
+    });
+    assert.equal(segHintClickOk, true, 'Clicking empty #hint in Segment must trigger #fileInput click');
+
+    // Load synthetic sample and verify dataset + well array loaded
+    await segFrame.locator('#sampleBtn').click();
+    await segFrame.locator('#hint').waitFor({ state: 'hidden', timeout: 15000 });
+    const segSampleInfo = await segPageFrame().evaluate(() => ({
+      fileName: document.getElementById('fileName').textContent,
+      rowCount: eval('S.data.rowCount'),
+      wells: activeChipState().wells.count,
+      rois: activeChipState().rois.map(r => r.name),
+      renderer: eval('S.renderer'),
+    }));
+    assert.equal(segSampleInfo.fileName, 'sample_cells.tsv');
+    assert.ok(segSampleInfo.rowCount > 1000, `Expected >1000 sample cells, got ${segSampleInfo.rowCount}`);
+    assert.equal(segSampleInfo.wells, 400);
+    assert.ok(segSampleInfo.rois.includes('Cortex') && segSampleInfo.rois.includes('Medulla'));
+
+    // Create a custom ROI via UI, paint via real mouse clicks/drags, flood fill, undo, redo
+    await segFrame.locator('#roiNameInput').fill('TumorCore');
+    await segFrame.locator('#addRoiBtn').click();
+    await segFrame.locator('.brush-preset[data-size="3"]').click();
+
+    const stageBox = await segFrame.locator('#stage').boundingBox();
+    assert.ok(stageBox && stageBox.width > 200 && stageBox.height > 200, 'Segment stage must have non-zero size');
+    const midX = stageBox.x + stageBox.width * 0.5;
+    const midY = stageBox.y + stageBox.height * 0.5;
+
+    // Single click + drag paint with 3x3 brush
+    await page.mouse.move(midX, midY);
+    await page.mouse.down();
+    await page.mouse.move(midX + 40, midY, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    const afterPaint = await segPageFrame().evaluate(() => {
+      const cs = activeChipState();
+      const r = cs.rois.find(x => x.name === 'TumorCore');
+      return { wellCount: r ? r.wellCount : 0, cellCount: r ? r.cellCount : 0 };
+    });
+    assert.ok(afterPaint.wellCount >= 9, `Expected >=9 painted wells, got ${afterPaint.wellCount}`);
+    assert.ok(afterPaint.cellCount > 0, 'Painted wells must report positive cell count');
+
+    // Flood fill corner region with Cortex, verify auto-reset returns tool to 'fill', then Undo & Redo
+    await segFrame.locator('.roi-item', { hasText: 'Cortex' }).click();
+    await segFrame.locator('#tools .tool[data-tool="flood_fill"]').click();
+    await page.mouse.click(stageBox.x + stageBox.width * 0.25, stageBox.y + stageBox.height * 0.25);
+    await page.waitForTimeout(150);
+    const afterFlood = await segPageFrame().evaluate(() => {
+      const cs = activeChipState();
+      const cortex = cs.rois.find(x => x.name === 'Cortex');
+      return { cortexWells: cortex.wellCount, tool: eval('S.tool') };
+    });
+    assert.ok(afterFlood.cortexWells > 20, `Expected flood fill to cover >20 wells, got ${afterFlood.cortexWells}`);
+    assert.equal(afterFlood.tool, 'fill', 'Auto-reset should return to Paint tool after Flood Fill');
+
+    await segFrame.locator('#undoBtn').click();
+    await page.waitForTimeout(100);
+    const afterUndo = await segPageFrame().evaluate(() => activeChipState().rois.find(x => x.name === 'Cortex').wellCount);
+    assert.equal(afterUndo, 0, 'Undo should revert flood fill');
+
+    await segFrame.locator('#redoBtn').click();
+    await page.waitForTimeout(100);
+    const afterRedo = await segPageFrame().evaluate(() => activeChipState().rois.find(x => x.name === 'Cortex').wellCount);
+    assert.equal(afterRedo, afterFlood.cortexWells, 'Redo should restore flood fill');
+
+    await page.screenshot({ path: path.join(RESULTS_DIR, `segment-${modeLabel}.png`) });
+
+    // Native exports: Primary cell CSV, Per-ROI summary CSV, and Session JSON
+    const segCsvDl = await triggerAndAwaitDownload(
+      electronApp,
+      downloadDir,
+      async () => { await segFrame.locator('#exportCsvBtn').click(); },
+      path.join(downloadDir, 'sample_cells_segmentation_tissue.csv')
+    );
+    assert.equal(segCsvDl.filename, 'sample_cells_segmentation_tissue.csv');
+    const segCsvLines = fs.readFileSync(segCsvDl.savePath, 'utf8').trim().split(/\r?\n/);
+    assert.equal(segCsvLines.length, segSampleInfo.rowCount + 1, 'Primary CSV must have header + all cells');
+    assert.ok(segCsvLines[0].endsWith(',tissue'), `Expected tissue group column header, got: ${segCsvLines[0]}`);
+    assert.ok(segCsvLines.some(l => l.endsWith(',TumorCore')), 'Primary CSV must contain TumorCore labels');
+    assert.ok(segCsvLines.some(l => l.endsWith(',Cortex')), 'Primary CSV must contain Cortex labels');
+
+    const segSumDl = await triggerAndAwaitDownload(
+      electronApp,
+      downloadDir,
+      async () => { await segFrame.locator('#exportSummaryBtn').click(); },
+      path.join(downloadDir, 'sample_cells_roi_summary_tissue.csv')
+    );
+    assert.equal(segSumDl.filename, 'sample_cells_roi_summary_tissue.csv');
+    const segSumLines = fs.readFileSync(segSumDl.savePath, 'utf8').trim().split(/\r?\n/);
+    assert.equal(segSumLines[0], 'roi,color,cell_count,well_count');
+    assert.ok(segSumLines.some(l => l.startsWith('TumorCore,')), 'Summary CSV must list TumorCore');
+
+    const segSessDl = await triggerAndAwaitDownload(
+      electronApp,
+      downloadDir,
+      async () => { await segFrame.locator('#saveSessionBtn').click(); },
+      path.join(downloadDir, 'sample_cells.segment-session.json')
+    );
+    const segSessObj = JSON.parse(fs.readFileSync(segSessDl.savePath, 'utf8'));
+    assert.equal(segSessObj.kind, 'sugar-segment-session');
+    assert.equal(segSessObj.version, 1);
+
+    const segSelfTestResult = await runEmbeddedSuite(page, 'segment/tests.html');
+    const geometryResult = await runEmbeddedSuite(page, 'segment/geometry-tests.html', {outputId: 'results'});
+    recordCheck('Segment sample load, ROI paint/flood/undo/redo, CSV/summary/session exports, and self-test suite (incl. 1M benchmark)', {
+      sampleCells: segSampleInfo.rowCount,
+      paintedTumorWells: afterPaint.wellCount,
+      floodedCortexWells: afterFlood.cortexWells,
+      selfTestSummary: segSelfTestResult.text.split('\n')[0],
+      geometryTests: geometryResult.text,
+      bench1M: segSelfTestResult.bench1M,
+    });
+
+    // -------------------------------------------------------------------------
     // 6. Persistent Iframe State Verification Across View Navigation
     // -------------------------------------------------------------------------
     await page.locator('[data-nav="home"]').click();
@@ -1124,7 +1254,11 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     await page.locator('[data-nav="microscopy"]').click();
     const persistedCenterText = await labFrame.locator('#center-point-display').innerText();
     assert.equal(persistedCenterText.trim(), 'Center Point: (15, 25)', 'Fluorescence Lab iframe state was lost across navigation');
-    recordCheck('Both tool iframes persist state across Dashboard / Grid Studio / Fluorescence Lab / Help navigation');
+
+    await page.locator('[data-nav="segment"]').click();
+    const persistedSegWells = await segPageFrame().evaluate(() => activeChipState().rois.find(x => x.name === 'TumorCore')?.wellCount || 0);
+    assert.equal(persistedSegWells, afterPaint.wellCount, 'Segment iframe state was lost across navigation');
+    recordCheck('All three tool iframes persist state across Dashboard / Grid Studio / Fluorescence Lab / Segment / Help navigation');
 
     // -------------------------------------------------------------------------
     // 7. Backend Failure Isolation & Retry Recovery via Test Instrumentation
@@ -1170,10 +1304,13 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
       const errStatus = await page.evaluate(() => window.surveyapps.getStatus());
       assert.equal(errStatus.state, 'error');
 
-      // Verify Grid Studio still works while backend is in error state
+      // Verify Grid Studio and Segment still work while backend is in error state
       await page.locator('[data-nav="grid"]').click();
       const gridStillWorks = await gsPageFrame().evaluate(() => Boolean(eval('S.img.el')));
       assert.equal(gridStillWorks, true, 'Grid Studio must remain operational when Python backend stops');
+      await page.locator('[data-nav="segment"]').click();
+      const segStillWorks = await segPageFrame().evaluate(() => eval('S.data.rowCount') > 1000);
+      assert.equal(segStillWorks, true, 'Segment must remain operational when Python backend stops');
 
       // Retry backend via topbar retry button
       await page.locator('#topbar-retry-btn').click();

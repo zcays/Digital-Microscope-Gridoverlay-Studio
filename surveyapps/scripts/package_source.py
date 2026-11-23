@@ -18,7 +18,7 @@ for name in ('README.md', 'INSTALL.md', 'DELIVERY.md', '.gitignore', 'package.js
     p = root/name
     if p.exists():
         files.append(p)
-for name in ('assets', 'backend', 'desktop', 'renderer', 'scripts', 'tests', 'docs', 'vendor'):
+for name in ('assets', 'backend', 'desktop', 'renderer', 'scripts', 'segment', 'tests', 'docs', 'vendor'):
     for p in (root/name).rglob('*'):
         if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc' and p.name != '.DS_Store':
             assert 'samples' not in p.relative_to(root).parts

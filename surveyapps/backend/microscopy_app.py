@@ -821,6 +821,51 @@ def _grid_positions(spacing, offset_x, offset_y, w, h, spacing_y=None):
     return x_pos, y_pos
 
 
+def _rotated_upload(rotation):
+    if _uploaded_image is None:
+        raise dash.exceptions.PreventUpdate
+    return _get_rotated_pil(_uploaded_image, rotation)
+
+
+def _download_png(image, filename):
+    buf = BytesIO()
+    image.save(buf, format='PNG')
+    return dcc.send_bytes(buf.getvalue(), filename)
+
+
+def _analysis_grid(size, spacing, offset_x, offset_y, spacing_y, link_spacing, center_point):
+    center = center_point or {}
+    if spacing_y is None or 'link' in (link_spacing or []):
+        spacing_y = spacing
+    return _grid_positions(spacing, offset_x + center.get('x', 0),
+                           offset_y + center.get('y', 0), *size, spacing_y)
+
+
+def _grid_overlay(size, positions, spacing, opacity, show_labels):
+    w, h = size
+    col_positions, row_positions = positions
+    overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    alpha = int(opacity * 255)
+    color = (0, 255, 255, alpha)
+
+    for x in col_positions:
+        draw.line([(x, 0), (x, h)], fill=color, width=2)
+    for y in row_positions:
+        draw.line([(0, y), (w, y)], fill=color, width=2)
+
+    if show_labels and 'show' in show_labels:
+        font = _get_mono_font(min(max(int(spacing * 0.15), 8), 16))
+        for r in range(len(row_positions) - 1):
+            for c in range(len(col_positions) - 1):
+                cx = (col_positions[c] + col_positions[c + 1]) / 2
+                cy = (row_positions[r] + row_positions[r + 1]) / 2
+                label = _row_label(r) + str(c + 1)
+                draw.text((cx, cy), label, fill=color, font=font, anchor='mm')
+
+    return overlay
+
+
 # ── Compute fluorescence per well ──────────────────────────────────────
 @app.callback(
     Output('fluor-store', 'data'),
@@ -836,19 +881,9 @@ def _grid_positions(spacing, offset_x, offset_y, w, h, spacing_y=None):
     prevent_initial_call=True
 )
 def compute_fluorescence(n_clicks, rotation, spacing, offset_x, offset_y, center_point, channel, spacing_y=None, link_spacing=None):
-    cx = center_point.get('x', 0) if center_point else 0
-    cy = center_point.get('y', 0) if center_point else 0
-    true_offset_x = cx + offset_x
-    true_offset_y = cy + offset_y
-
-    if _uploaded_image is None:
-        raise dash.exceptions.PreventUpdate
-    current = _uploaded_image
-    rotated = _get_rotated_pil(current, rotation)
+    rotated = _rotated_upload(rotation)
     arr = np.array(rotated)
-    w, h = rotated.size
-    spacing_y = spacing if spacing_y is None or 'link' in (link_spacing or []) else spacing_y
-    x_pos, y_pos = _grid_positions(spacing, true_offset_x, true_offset_y, w, h, spacing_y)
+    x_pos, y_pos = _analysis_grid(rotated.size, spacing, offset_x, offset_y, spacing_y, link_spacing, center_point)
 
     n_rows = max(0, len(y_pos) - 1)
     n_cols = max(0, len(x_pos) - 1)
@@ -962,9 +997,7 @@ def update_well_options(img_data, spacing, offset_x, offset_y, spacing_y=None, l
     if not img_data:
         return []
     w, h = img_data['w'], img_data['h']
-    x_pos, y_pos = _grid_positions(spacing, offset_x + (center_point or {}).get('x', 0),
-                                            offset_y + (center_point or {}).get('y', 0), w, h,
-                                            spacing if spacing_y is None or 'link' in (link_spacing or []) else spacing_y)
+    x_pos, y_pos = _analysis_grid((w, h), spacing, offset_x, offset_y, spacing_y, link_spacing, center_point)
     n_rows = max(0, len(y_pos) - 1)
     n_cols = max(0, len(x_pos) - 1)
     
@@ -1048,14 +1081,9 @@ def crop_well(n_clicks, well_value, rotation, spacing, offset_x, offset_y, spaci
     if not well_value:
         raise dash.exceptions.PreventUpdate
     r, c = [int(v) for v in well_value.split(',')]
-    if _uploaded_image is None:
-        raise dash.exceptions.PreventUpdate
-    current = _uploaded_image
-    rotated = _get_rotated_pil(current, rotation)
+    rotated = _rotated_upload(rotation)
     w, h = rotated.size
-    x_pos, y_pos = _grid_positions(spacing, offset_x + (center_point or {}).get('x', 0),
-                                            offset_y + (center_point or {}).get('y', 0), w, h,
-                                            spacing if spacing_y is None or 'link' in (link_spacing or []) else spacing_y)
+    x_pos, y_pos = _analysis_grid((w, h), spacing, offset_x, offset_y, spacing_y, link_spacing, center_point)
 
     if not (0 <= r < len(y_pos)-1 and 0 <= c < len(x_pos)-1):
         raise dash.exceptions.PreventUpdate
@@ -1066,10 +1094,7 @@ def crop_well(n_clicks, well_value, rotation, spacing, offset_x, offset_y, spaci
     cropped = rotated.crop((x0, y0, x1, y1))
 
     well_name = _row_label(r) + str(c + 1)
-    buf = BytesIO()
-    cropped.save(buf, format='PNG')
-    buf.seek(0)
-    return dcc.send_bytes(buf.getvalue(), f'well_{well_name}.png')
+    return _download_png(cropped, f'well_{well_name}.png')
 
 
 # ── Save image only ───────────────────────────────────────────────────
@@ -1080,14 +1105,8 @@ def crop_well(n_clicks, well_value, rotation, spacing, offset_x, offset_y, spaci
     prevent_initial_call=True
 )
 def save_image(n_clicks, rotation):
-    if _uploaded_image is None:
-        raise dash.exceptions.PreventUpdate
-    current = _uploaded_image
-    rotated = _get_rotated_pil(current, rotation)
-    buf = BytesIO()
-    rotated.save(buf, format='PNG')
-    buf.seek(0)
-    return dcc.send_bytes(buf.getvalue(), 'microscopy_image.png')
+    rotated = _rotated_upload(rotation)
+    return _download_png(rotated, 'microscopy_image.png')
 
 
 # ── Save grid only (transparent background) ───────────────────────────
@@ -1106,37 +1125,11 @@ def save_image(n_clicks, rotation):
     prevent_initial_call=True
 )
 def save_grid(n_clicks, rotation, spacing, offset_x, offset_y, opacity, show_labels, spacing_y=None, link_spacing=None, center_point=None):
-    if _uploaded_image is None:
-        raise dash.exceptions.PreventUpdate
-    current = _uploaded_image
-    rotated = _get_rotated_pil(current, rotation)
-    w, h = rotated.size
-    grid_img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(grid_img)
-    alpha = int(opacity * 255)
-    color = (0, 255, 255, alpha)
+    rotated = _rotated_upload(rotation)
+    positions = _analysis_grid(rotated.size, spacing, offset_x, offset_y, spacing_y, link_spacing, center_point)
+    grid_img = _grid_overlay(rotated.size, positions, spacing, opacity, show_labels)
 
-    col_positions, row_positions = _grid_positions(spacing, offset_x + (center_point or {}).get('x', 0),
-                                            offset_y + (center_point or {}).get('y', 0), w, h,
-                                            spacing if spacing_y is None or 'link' in (link_spacing or []) else spacing_y)
-    for x in col_positions:
-        draw.line([(x, 0), (x, h)], fill=color, width=2)
-    for y in row_positions:
-        draw.line([(0, y), (w, y)], fill=color, width=2)
-
-    if show_labels and 'show' in show_labels:
-        font = _get_mono_font(min(max(int(spacing * 0.15), 8), 16))
-        for r in range(len(row_positions) - 1):
-            for c in range(len(col_positions) - 1):
-                cx = (col_positions[c] + col_positions[c + 1]) / 2
-                cy = (row_positions[r] + row_positions[r + 1]) / 2
-                label = _row_label(r) + str(c + 1)
-                draw.text((cx, cy), label, fill=color, font=font, anchor='mm')
-
-    buf = BytesIO()
-    grid_img.save(buf, format='PNG')
-    buf.seek(0)
-    return dcc.send_bytes(buf.getvalue(), 'microscopy_grid.png')
+    return _download_png(grid_img, 'microscopy_grid.png')
 
 
 # ── Save merged (image + grid overlay + fluorescence) ─────────────────
@@ -1157,37 +1150,14 @@ def save_grid(n_clicks, rotation, spacing, offset_x, offset_y, opacity, show_lab
     prevent_initial_call=True
 )
 def save_merged(n_clicks, rotation, spacing, offset_x, offset_y, opacity, show_labels, fluor_data, show_fluor, spacing_y=None, link_spacing=None, center_point=None):
-    if _uploaded_image is None:
-        raise dash.exceptions.PreventUpdate
-    current = _uploaded_image
-    rotated = _get_rotated_pil(current, rotation)
-    w, h = rotated.size
-
-    # Draw grid on RGBA overlay
-    overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    alpha = int(opacity * 255)
-    color = (0, 255, 255, alpha)
-
-    col_positions, row_positions = _grid_positions(spacing, offset_x + (center_point or {}).get('x', 0),
-                                            offset_y + (center_point or {}).get('y', 0), w, h,
-                                            spacing if spacing_y is None or 'link' in (link_spacing or []) else spacing_y)
-    for x in col_positions:
-        draw.line([(x, 0), (x, h)], fill=color, width=2)
-    for y in row_positions:
-        draw.line([(0, y), (w, y)], fill=color, width=2)
-
-    if show_labels and 'show' in show_labels:
-        font = _get_mono_font(min(max(int(spacing * 0.15), 8), 16))
-        for r in range(len(row_positions) - 1):
-            for c in range(len(col_positions) - 1):
-                cx = (col_positions[c] + col_positions[c + 1]) / 2
-                cy = (row_positions[r] + row_positions[r + 1]) / 2
-                label = _row_label(r) + str(c + 1)
-                draw.text((cx, cy), label, fill=color, font=font, anchor='mm')
+    rotated = _rotated_upload(rotation)
+    positions = _analysis_grid(rotated.size, spacing, offset_x, offset_y, spacing_y, link_spacing, center_point)
+    col_positions, row_positions = positions
+    overlay = _grid_overlay(rotated.size, positions, spacing, opacity, show_labels)
 
     # Draw fluorescence values if computed and checked
     if show_fluor and 'show' in show_fluor and fluor_data and fluor_data.get('values'):
+        draw = ImageDraw.Draw(overlay)
         vals = fluor_data['values']
         f_font = _get_mono_font(min(max(int(spacing * 0.14), 8), 14))
         yellow_color = (255, 255, 0, 230)
@@ -1203,10 +1173,7 @@ def save_merged(n_clicks, rotation, spacing, offset_x, offset_y, opacity, show_l
     merged = Image.alpha_composite(merged, overlay)
     merged = merged.convert('RGB')
 
-    buf = BytesIO()
-    merged.save(buf, format='PNG')
-    buf.seek(0)
-    return dcc.send_bytes(buf.getvalue(), 'microscopy_merged.png')
+    return _download_png(merged, 'microscopy_merged.png')
 
 
 # ── Save Fluorescence Matrix CSV ───────────────────────────────────────

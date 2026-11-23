@@ -19,8 +19,8 @@
  *  7. Refuse rather than guess: error too large, too few samples matched, wells continuing beyond the array (wrong chip), side errors.
  *     For non-square chips both orientations are tried (afCompute) and the better one kept.
  *
- * afForward() MUST mirror the renderers: if the image maths in gl.js / cpu.js / warp.js changes, change it here too
- * (tests.html fits synthetic chips with known geometry and checks where the array corners land).
+ * afForward() mirrors the renderers' lens and image transform, and uses warp.js for the distortion patch and fine mesh.
+ * tests.html fits synthetic chips with known geometry and checks where the array corners land.
  * Thresholds: the AF object below. Troubleshooting: after a run, AF.debug holds the internals (peaks, presence map, per-stage errors,
  * wellProfile = wells per column/row, joined patches, first walls).
  * Units: source-image px in, canvas px out; "lattice" coordinates are in periods, with walls 0..N on the whole numbers. */
@@ -55,6 +55,14 @@ const AF = {
 const AF_K1 = 0, AF_K2 = 1, AF_ROT = 2, AF_SCALE = 3, AF_X = 4, AF_Y = 5, AF_WARP = 6;       // parameter vector layout (22 numbers)
 const AF_STEPS = [1e-4, 1e-4, 1e-3, 1e-5, 1e-2, 1e-2, ...new Array(16).fill(1e-5)];
 
+/** Decode corner offsets and edge bows into the handle positions that warp.js uses. */
+function afWarpHandles(th) {
+  return {
+    c: {nw: {x: th[6], y: th[7]}, ne: {x: 1 + th[8], y: th[9]}, se: {x: 1 + th[10], y: 1 + th[11]}, sw: {x: th[12], y: 1 + th[13]}},
+    dev: {n: {x: th[14], y: th[15]}, e: {x: th[16], y: th[17]}, s: {x: th[18], y: th[19]}, w: {x: th[20], y: th[21]}},
+  };
+}
+
 /** Forward image model: source px (sx, sy) → canvas px, written to out[0], out[1]; out[2], out[3] = canvas-normalised position BEFORE the
  *  distortion (the coordinates the handles and the fine mesh work in). geo = {w, h, cx, cy, docW, docH, mesh?}. */
 function afForward(th, geo) {
@@ -62,11 +70,8 @@ function afForward(th, geo) {
   const lcx = geo.cx * geo.w, lcy = geo.cy * geo.h, R = .5 * Math.hypot(geo.w, geo.h), lens = k1 !== 0 || k2 !== 0;
   const ox = th[AF_X] + geo.w * sc / 2, oy = th[AF_Y] + geo.h * sc / 2, hw = geo.w / 2, hh = geo.h / 2;
   let warped = false; for (let i = AF_WARP; i < AF_WARP + 16; i++) if (th[i] !== 0) { warped = true; break; }
-  // 3×3 control points of the distortion patch, same construction as warpControlPoints() in warp.js
-  const w = th, nwx = w[6], nwy = w[7], nex = 1 + w[8], ney = w[9], sex = 1 + w[10], sey = 1 + w[11], swx = w[12], swy = 1 + w[13];
-  const nx = (nwx + nex) / 2 + w[14], ny = (nwy + ney) / 2 + w[15], ex = (nex + sex) / 2 + w[16], ey = (ney + sey) / 2 + w[17];
-  const sx_ = (sex + swx) / 2 + w[18], sy_ = (sey + swy) / 2 + w[19], wx = (swx + nwx) / 2 + w[20], wy = (swy + nwy) / 2 + w[21];
-  const cx = (nwx + nex + sex + swx) / 4 + (w[14] + w[16] + w[18] + w[20]) / 2, cy = (nwy + ney + sey + swy) / 4 + (w[15] + w[17] + w[19] + w[21]) / 2;
+  const points = warped ? warpControlPoints(afWarpHandles(th)) : null;
+  const patch = {x: 0, y: 0};
   return (sx, sy, out) => {
     let mx = (sx - lcx) / R, my = (sy - lcy) / R;
     if (lens) {                                                  // invert r' = r(1 − k1 r² − k2 r⁴): the shader maps corrected → source, we need source → corrected
@@ -77,10 +82,10 @@ function afForward(th, geo) {
     const dx = (lcx + mx * R - hw) * sc, dy = (lcy + my * R - hh) * sc;
     let px = ox + cs * dx - sn * dy, py = oy + sn * dx + cs * dy;
     const u = px / geo.docW, v = py / geo.docH; out[2] = u; out[3] = v;
-    if (warped) {
-      const a0 = 2 * (u - .5) * (u - 1), a1 = -4 * u * (u - 1), a2 = 2 * u * (u - .5), b0 = 2 * (v - .5) * (v - 1), b1 = -4 * v * (v - 1), b2 = 2 * v * (v - .5);
-      px = (b0 * (a0 * nwx + a1 * nx + a2 * nex) + b1 * (a0 * wx + a1 * cx + a2 * ex) + b2 * (a0 * swx + a1 * sx_ + a2 * sex)) * geo.docW;
-      py = (b0 * (a0 * nwy + a1 * ny + a2 * ney) + b1 * (a0 * wy + a1 * cy + a2 * ey) + b2 * (a0 * swy + a1 * sy_ + a2 * sey)) * geo.docH;
+    if (points) {
+      warpPatchPoint(u, v, points, patch);
+      px = patch.x * geo.docW;
+      py = patch.y * geo.docH;
     }
     if (geo.mesh) { const o = warpMeshOffset(geo.mesh, u, v); px += o.x * geo.docW; py += o.y * geo.docH; }
     out[0] = px; out[1] = py;

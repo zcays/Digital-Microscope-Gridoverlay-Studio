@@ -5,7 +5,7 @@
 <h1 align="center">SUGAR (Super Ultra Gridding Arrays Repo)</h1>
 
 <p align="center">
-  <strong>Unified offline desktop suite for microfluidic chip grid calibration and well fluorescence analysis</strong>
+  <strong>Unified offline desktop suite for microfluidic chip grid calibration, fluorescence analysis, and spatial ROI segmentation</strong>
 </p>
 
 <p align="center">
@@ -14,14 +14,16 @@
 
 ---
 
-**SUGAR** packages two open-source microscopy tools into a single standalone desktop application:
+**SUGAR** packages three offline microscopy and spatial analysis tools into a single standalone desktop application:
 
 1. **Grid Studio** — from [Digital-Microscope-Gridoverlay-Studio](https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio)
    Calibrated chip grid overlays, lens fisheye correction, corner/edge distortion warp, cropping, computer-vision **Auto-fit**, portable alignment settings JSON save/load, and full-resolution PNG export.
 2. **Fluorescence Lab** — from [Microscopy-Grid-Overlay](https://github.com/zcays/Microscopy-Grid-Overlay)
    Interactive X/Y grid placement on TIFF/PNG/JPEG micrographs, per-well fluorescence intensity calculation across channels (`DAPI`, `FITC`, `TRITC`, `Cy5`, `mCherry`, `CFP`, `YFP`, `RGB`, `Grayscale`), Plotly heatmaps, CSV/PNG/well-crop exports, and JSON grid settings save/load.
+3. **Segment** — fast offline JavaScript port of Survey Genomics' spatial ROI segmentation tool (`survey.spatial.segment`)
+   Load CSV/TSV/TXT cell tables (smooth past 1,000,000 cells via typed arrays, uniform-grid spatial indexing, and WebGL point sprites with Canvas 2D fallback), optional JSON or `value,color` metadata, well-level painting with variable brush sizes, dedicated erase mode, 4-connected flood fill & same-ROI flood erase, ROI opacity control, undo/redo, and RFC 4180 CSV / summary CSV / resumable session JSON exports.
 
-Both tools run completely offline on your computer with a bundled Electron runtime and a frozen local Python scientific engine (`Dash`, `Plotly`, `Pillow`, `NumPy`).
+All three tools run completely offline on your computer with a bundled Electron runtime and a frozen local Python scientific engine (`Dash`, `Plotly`, `Pillow`, `NumPy`) for Fluorescence Lab.
 
 ---
 
@@ -31,21 +33,21 @@ Both tools run completely offline on your computer with a bundled Electron runti
 |---|---|
 | ![SUGAR Dashboard](docs/images/dashboard.png) | ![Grid Studio Workspace](docs/images/grid-studio.png) |
 
-| Fluorescence Lab |
-|---|
-| ![Fluorescence Lab Workspace](docs/images/fluorescence-lab.png) |
+| Fluorescence Lab | Segment |
+|---|---|
+| ![Fluorescence Lab Workspace](docs/images/fluorescence-lab.png) | ![Segment Workspace](docs/images/segment.png) |
 
 ---
 
 ## Quick Download & Install
 
-The published 1.0.3 installers use the former name **SurveyApps!**. Downloads are available on the **[GitHub Releases](https://github.com/zcays/sugar/releases)** page (and produced by the [Build SUGAR workflow](.github/workflows/build-surveyapps.yml)).
+Downloads for **SUGAR 1.1.0** are available on the **[GitHub Releases](https://github.com/zcays/sugar/releases)** page (and produced by the [Build SUGAR workflow](.github/workflows/build-surveyapps.yml)).
 
 | Platform | Recommended Download | Portable Alternative | Requirements |
 |---|---|---|---|
-| **macOS (Apple Silicon — M1/M2/M3/M4)** | `SurveyApps-1.0.3-mac-arm64.dmg` | `SurveyApps-1.0.3-mac-arm64.zip` | macOS 14.0+ |
-| **macOS (Intel x64)** | `SurveyApps-1.0.3-mac-x64.dmg` | `SurveyApps-1.0.3-mac-x64.zip` | macOS 14.0+ |
-| **Windows (64-bit x64)** | `SurveyApps-1.0.3-win-x64.exe` | `SurveyApps-1.0.3-win-x64.zip` | Windows 10/11 (64-bit) |
+| **macOS (Apple Silicon — M1/M2/M3/M4)** | `SUGAR-1.1.0-mac-arm64.dmg` | `SUGAR-1.1.0-mac-arm64.zip` | macOS 14.0+ |
+| **macOS (Intel x64)** | `SUGAR-1.1.0-mac-x64.dmg` | `SUGAR-1.1.0-mac-x64.zip` | macOS 14.0+ |
+| **Windows (64-bit x64)** | `SUGAR-1.1.0-win-x64.exe` | `SUGAR-1.1.0-win-x64.zip` | Windows 10/11 (64-bit) |
 
 > **Full step-by-step instructions:** See **[INSTALL.md](INSTALL.md)** for macOS DMG/ZIP installation, Windows EXE/ZIP installation, SHA-256 verification, and unsigned-app approval steps.
 
@@ -59,9 +61,9 @@ The published 1.0.3 installers use the former name **SurveyApps!**. Downloads ar
 ## Features & Scientific Workflows
 
 ### Unified Workspace
-- **Persistent sessions:** Switch freely between **Dashboard**, **Grid Studio**, **Fluorescence Lab**, and **Help & Reference** without losing loaded images, grid alignment, or computed heatmaps.
+- **Persistent sessions:** Switch freely between **Dashboard**, **Grid Studio**, **Fluorescence Lab**, **Segment**, and **Help & Reference** without losing loaded images, grid alignment, computed heatmaps, or painted ROIs.
 - **100% local & private:** Zero external network requests, zero CDN assets, zero telemetry. The bundled Python backend binds only to `127.0.0.1` on an OS-assigned port with a per-launch authentication token and shuts down cleanly when the app exits.
-- **Fault isolation:** If the Python analysis engine encounters an error, **Grid Studio** stays fully usable while you retry **Fluorescence Lab**.
+- **Fault isolation:** If the Python analysis engine encounters an error, **Grid Studio** and **Segment** stay fully usable while you retry **Fluorescence Lab**.
 
 ### 1. Grid Studio (Optical Correction & Calibrated Chip Overlay)
 - Load images via **Open image…**, drag-and-drop, clipboard paste, or **Load sample** (built-in fisheye test image); the active filename is shown in the top bar.
@@ -81,19 +83,27 @@ The published 1.0.3 installers use the former name **SurveyApps!**. Downloads ar
 - **Measurement note:** Values represent **mean 8-bit digital channel intensities (`0–255`)**, not calibrated molar concentrations. Multi-page TIFFs read the first frame, and partial edge wells are excluded.
 - **Exports & configs:** Export the well intensity matrix **CSV**, **Image Only PNG**, **Grid Only PNG**, **Merged (Image + Grid) PNG**, individual **Cropped Well PNGs**, and save/reload grid configurations as **JSON**.
 
+### 3. Segment (Interactive Spatial ROI Segmentation)
+- Open plain-text cell tables (`.csv`, `.tsv`, `.txt`, auto-detecting tab/comma/semicolon/whitespace delimiters and headers) with cell ID, X/Y coordinates, optional well/array/chip columns (`id`, `arr-row`, `arr-col`, `chip-num`), and categorical or numeric covariates—or click **Load sample** to try the built-in synthetic 20×20 array.
+- Load optional color/chip **Metadata…** (JSON supporting Survey `colors`/`meta`/`array`/`chips` schemas, or 2-column `value,color` CSV/TSV). Unknown categories receive Scanpy's default palettes; numeric columns render with selectable continuous color scales (`Viridis`, `Plasma`, `Inferno`, `Magma`, `Cividis`, `Cool-Warm`).
+- **Interactive segmentation at well granularity:** Create, rename, recolor, and delete ROIs; paint via single click or drag (`1×1`–`15×15` well brush); re-assign wells from another ROI; erase any ROI via dedicated **Erase** mode (`E`); 4-connected **Flood fill** (`G`, empty space or ROI conversion) and same-ROI **Flood erase** (`X`); adjust ROI overlay opacity; pan/zoom smoothly; and undo/redo (`⌘/Ctrl+Z`).
+- **1M+ cell performance:** Streams tables into typed arrays with uniform-grid spatial indexing and WebGL point-sprite rendering (with automatic Canvas 2D software fallback).
+- **Exports & round-trip:** Export RFC 4180 UTF-8 per-cell CSV (`<stem>_segmentation_<group>.csv` with `<group>` column matching `apply_segmentation_results`, empty = unassigned), per-ROI summary CSV (`roi,color,cell_count,well_count`), and resumable session JSON; re-import saved segmentation CSVs onto the same cells.
+
 ### Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
-| `Alt + 1` / `2` / `3` / `4` | Dashboard / Grid Studio / Fluorescence Lab / Help & Reference |
+| `Alt + 1` / `2` / `3` / `4` / `5` | Dashboard / Grid Studio / Fluorescence Lab / Segment / Help & Reference |
 | `Ctrl/⌘ + B` | Collapse or expand sidebar |
 | `V` / `D` / `C` | Grid Studio: Move / Distort / Crop tool |
 | `A` | Grid Studio: Auto-fit image to selected chip grid |
 | `P` | Grid Studio: Pick 4 corners for Auto-fit (Enter fits, Esc cancels) |
 | `← → ↑ ↓` | Grid Studio: Nudge image `1 px` (`Shift` = `10 px`, `Alt` = `0.1 px`) |
 | `G` / `\` | Grid Studio: Toggle grid / Before-after fisheye toggle |
-| `Ctrl/⌘ + O` / `S` / `E` | Grid Studio: Open image / Save settings… / Export PNG |
-| `?` | Grid Studio: Show full in-app shortcut reference |
+| `Ctrl/⌘ + O` / `S` / `E` | Grid Studio / Segment: Open file / Save settings or session / Export |
+| `B` / `E` / `G` / `X` / `H` | Segment: Paint / Erase / Flood fill / Flood erase / Pan (`[` `]` brush size) |
+| `?` | Grid Studio / Segment: Show full in-app shortcut reference |
 
 ---
 
@@ -135,7 +145,7 @@ npm start
   ```bash
   CSC_IDENTITY_AUTO_DISCOVERY=false npm run build:mac
   ```
-  Outputs `dist/SUGAR-1.0.3-mac-arm64.dmg` and `dist/SUGAR-1.0.3-mac-arm64.zip`.
+  Outputs `dist/SUGAR-1.1.0-mac-arm64.dmg` and `dist/SUGAR-1.1.0-mac-arm64.zip`.
 
 - **macOS (Intel x64 on Apple Silicon via Rosetta + x64 Python):**
   ```bash
@@ -149,13 +159,16 @@ npm start
   python scripts/build_backend.py
   npm run build:win
   ```
-  Outputs `dist/SUGAR-1.0.3-win-x64.exe` (NSIS installer) and `dist/SUGAR-1.0.3-win-x64.zip` (portable archive).
+  Outputs `dist/SUGAR-1.1.0-win-x64.exe` (NSIS installer) and `dist/SUGAR-1.1.0-win-x64.zip` (portable archive).
 
 ### Automated Tests
 
 ```bash
 # Python scientific & backend service unit tests (9/9)
 python -m unittest discover -s tests -p "test_*.py" -v
+
+# Segment table-parser regression tests (5/5)
+node --test tests/segment-parser.cjs
 
 # Backend startup error & idempotent cleanup test
 node tests/backend-lifecycle.cjs
@@ -184,6 +197,7 @@ sugar/
 │   └── images/                             # Application screenshots
 ├── renderer/                               # Unified dashboard, navigation, Help & status UI
 ├── scripts/                                # Icon rasterizers, PyInstaller freeze, packaging helpers
+├── segment/                                # Offline JS spatial ROI segmentation tool + tests & synthetic sample
 ├── tests/                                  # Python science tests & Playwright E2E desktop suite
 ├── vendor/                                 # Pinned upstream snapshots, provenance.json & patches
 ├── INSTALL.md                              # Detailed user installation & troubleshooting guide
@@ -204,4 +218,6 @@ SUGAR integrates pinned snapshots of:
 - [`zcays/Digital-Microscope-Gridoverlay-Studio`](https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio)
 - [`zcays/Microscopy-Grid-Overlay`](https://github.com/zcays/Microscopy-Grid-Overlay)
 
-Full commit hashes, file checksums, and reconstruction patches are recorded in [`vendor/provenance.json`](vendor/provenance.json). Neither upstream snapshot included an explicit `LICENSE` file; third-party bundled runtimes (Electron, Chromium, Python, Dash, Plotly, Pillow, NumPy) retain their respective open-source licenses.
+**Segment** (`segment/`) is an original offline JavaScript implementation compatible with Survey Genomics' spatial ROI segmentation workflow ([`survey-genomics/survey`](https://github.com/survey-genomics/survey), `src/survey/spatial/segment.py`); no Python source files from that repository are vendored.
+
+Full commit hashes, file checksums, and reconstruction patches are recorded in [`vendor/provenance.json`](vendor/provenance.json). Neither upstream microscopy snapshot included an explicit `LICENSE` file; third-party bundled runtimes (Electron, Chromium, Python, Dash, Plotly, Pillow, NumPy) retain their respective open-source licenses.

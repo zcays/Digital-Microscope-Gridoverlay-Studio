@@ -55,6 +55,19 @@ The testing delegate's narrative summary used wrong environment versions, nonexi
 
 The E2E harness now checks error arrays again after teardown. Connection resets/empty responses caused specifically by intentional quit are classified as expected; other late errors still fail. It also waits for the restarted Dash workspace to render before ending the recovery test. This prevents a premature PASS while asynchronous teardown events are still arriving.
 
+## Release `v1.1.0` (2026-11-22)
+
+First release under the **SUGAR (Super Ultra Gridding Arrays Repo)** brand and icon. Integrates the offline JavaScript **Segment** spatial ROI tool (`segment/`), bundles Grid Studio `15f4e34` (Pick 4 corners, automatic Crop to array with selectable margin, per-axis polarity Auto-fit for bent/oblique-lit chips, shared warp math, full undo restore, and refreshed dark cyan UI), and refactors Fluorescence Lab grid geometry and Electron shell setup.
+
+Local Apple Silicon (`arm64`) verification prior to CI release build:
+- Source Grid Studio self-tests: **197 / 197 PASS** (including both local private real-photo checks, zero page errors).
+- Vendored Grid Studio self-tests: **197 / 197 PASS** (4 private-photo checks skipped cleanly, zero page errors).
+- Python Fluorescence Lab unit & service suite: **9 / 9 PASS**.
+- Backend lifecycle error & cleanup check (`tests/backend-lifecycle.cjs`): **PASS**.
+- Segment table-parser regression suite (`node --test tests/segment-parser.cjs`): **5 / 5 PASS** against both source and packaged `app.asar`.
+- Packaged ARM64 desktop E2E (`tests/desktop.cjs --packaged`): **10 / 10 groups PASS** (embedded Grid Studio 197/197, embedded Segment 21/21 + 4 geometry regressions + 1M-cell WebGL benchmark, 3-tool iframe persistence, backend fault isolation & recovery, zero unexpected errors, zero orphan backend processes).
+- Packaging integrity: `codesign --verify --deep --strict`, `hdiutil verify`, `unzip -tq`, zero `samples/` entries in ASAR/ZIP, and byte-exact ASAR source parity verified.
+
 ## Release `v1.0.3` (2026-11-15)
 
 Adds portable Grid Studio alignment settings save/load (including the ⌘/Ctrl+S shortcut and workspace JSON drop) and top-bar image filename display. Source, app version, lockfile, installation instructions and installer filenames are updated together. The prior local-only 1.0.2 settings build is superseded by this distinct release version. Keep the original image and custom chip lists separately from settings files.

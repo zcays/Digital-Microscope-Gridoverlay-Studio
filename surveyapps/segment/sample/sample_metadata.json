@@ -1,0 +1,49 @@
+{
+  "description": "Synthetic 20x20 microfluidic array sample for SUGAR Segment (no real patient or lab data)",
+  "group": "tissue",
+  "color_column": "cell_type",
+  "cell_size": 4,
+  "chip_key_prop": "chip-num",
+  "array": {
+    "version": "V-Demo-20",
+    "n": 4,
+    "s": 170,
+    "w": 30,
+    "arr_shape": [
+      20,
+      20
+    ],
+    "flat_top": true,
+    "origin": "corner"
+  },
+  "colors": {
+    "cell_type": {
+      "Proximal Tubule": "#58d8f5",
+      "Loop of Henle": "#f59e0b",
+      "Collecting Duct": "#e056fd",
+      "Endothelial": "#22c55e",
+      "Immune": "#ef4444",
+      "Podocyte": "#a78bfa",
+      "Background": "#64748b"
+    },
+    "leiden": {
+      "0": "#58d8f5",
+      "1": "#f59e0b",
+      "2": "#e056fd",
+      "3": "#22c55e",
+      "4": "#ef4444",
+      "5": "#a78bfa",
+      "6": "#64748b"
+    }
+  },
+  "rois": [
+    {
+      "name": "Cortex",
+      "color": "#1f77b4"
+    },
+    {
+      "name": "Medulla",
+      "color": "#ff7f0e"
+    }
+  ]
+}

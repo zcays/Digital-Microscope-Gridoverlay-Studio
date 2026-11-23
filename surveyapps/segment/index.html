@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Segment — Spatial ROI Segmentation</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top action toolbar -->
+    <header id="top" aria-label="Segment Toolbar">
+      <div class="identity">
+        <div class="brand">Segment</div>
+        <span id="fileName" hidden></span>
+      </div>
+
+      <div class="actionGroup">
+        <label class="btn" for="fileInput" title="Open a cell table (.csv, .tsv, .txt) — Ctrl/⌘+O">Open cells…</label>
+        <input id="fileInput" type="file" accept=".csv,.tsv,.txt,.tab,text/plain,text/csv,text/tab-separated-values" hidden>
+
+        <label class="btn" for="metaInput" title="Load optional color &amp; chip metadata (.json, .csv, .tsv, .txt)">Metadata…</label>
+        <input id="metaInput" type="file" accept=".json,.csv,.tsv,.txt,application/json,text/plain,text/csv" hidden>
+
+        <button id="sampleBtn" type="button" title="Load built-in synthetic demo dataset">Load sample</button>
+      </div>
+
+      <div class="actionGroup">
+        <label class="btn" for="sessionInput" title="Resume a saved session (.json) or re-import segmentation labels (.csv)">Load session / CSV…</label>
+        <input id="sessionInput" type="file" accept=".json,.csv,.tsv,.txt,application/json,text/csv" hidden>
+        <input id="bgInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
+
+        <button id="undoBtn" type="button" disabled title="Undo last edit (Ctrl/⌘+Z)">Undo</button>
+        <button id="redoBtn" type="button" disabled title="Redo edit (Ctrl/⌘+Shift+Z)">Redo</button>
+        <button id="helpBtn" type="button" title="Keyboard shortcuts &amp; file format guide (?)">?</button>
+      </div>
+
+      <div class="exportControls">
+        <button id="saveSessionBtn" type="button" disabled title="Save ROI session JSON to resume later (Ctrl/⌘+S)">Save session</button>
+        <button id="exportSummaryBtn" type="button" disabled title="Export per-ROI summary CSV">Summary CSV</button>
+        <button id="exportCsvBtn" type="button" class="primary" disabled title="Export per-cell segmentation CSV (Ctrl/⌘+E)">Export CSV</button>
+      </div>
+    </header>
+
+    <!-- Left vertical tool rail -->
+    <aside id="tools" aria-label="Segmentation Tools">
+      <button type="button" class="tool on" data-tool="fill" aria-pressed="true" title="Paint wells (B) — click or drag to assign to active ROI">
+        <svg viewBox="0 0 24 24"><path d="M18.4 3.6a2.1 2.1 0 0 1 3 3L11 17l-4 1 1-4L18.4 3.6z"/><path d="M4 20h16"/></svg>
+      </button>
+      <button type="button" class="tool" data-tool="erase" aria-pressed="false" title="Erase wells (E) — remove any ROI regardless of selection">
+        <svg viewBox="0 0 24 24"><path d="M20 20H7L3 16a2 2 0 0 1 0-2.8l9.6-9.6a2 2 0 0 1 2.8 0l5.6 5.6a2 2 0 0 1 0 2.8L13 20"/><path d="M6.5 11.5l6 6"/></svg>
+      </button>
+      <button type="button" class="tool" data-tool="flood_fill" aria-pressed="false" title="Flood fill (G) — fill enclosed empty space or convert a connected ROI">
+        <svg viewBox="0 0 24 24"><path d="M19 11l-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11z"/><path d="M5 2l5 5"/><path d="M2 13h15"/><path d="M20 15s2 2.2 2 3.5a2 2 0 1 1-4 0c0-1.3 2-3.5 2-3.5z"/></svg>
+      </button>
+      <button type="button" class="tool" data-tool="flood_erase" aria-pressed="false" title="Flood erase (X) — erase only the connected wells of the clicked ROI">
+        <svg viewBox="0 0 24 24"><path d="M19 11l-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11z"/><path d="M16 15l5 5M21 15l-5 5"/></svg>
+      </button>
+      <button type="button" class="tool" data-tool="pan" aria-pressed="false" title="Pan view (H or hold Space, or middle/right-drag)">
+        <svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3m3-3l3 3M12 22l-3-3m3 3l3-3M2 12l3-3m-3 3l3 3M22 12l-3-3m3 3l-3 3"/></svg>
+      </button>
+    </aside>
+
+    <!-- Main interactive spatial canvas stage -->
+    <main id="ws">
+      <div id="stage">
+        <canvas id="bgCanvas"></canvas>
+        <canvas id="cellCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <canvas id="cursorCanvas"></canvas>
+
+        <div id="hint" role="button" tabindex="0" aria-label="Open cell table file">
+          <div>
+            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <div>Click here or drop a <b>.csv / .tsv / .txt</b> cell table to begin</div>
+            <div class="hint-sub">Supports 1,000,000+ cells, optional color/chip metadata, well-level painting, flood fill, and CSV export.</div>
+            <div class="hint-actions">
+              <button type="button" class="primary" data-action="load-sample">Load synthetic sample</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="progressWrap" hidden aria-live="polite">
+          <div id="progressLabel">Loading…</div>
+          <div class="progress-track"><div id="progressBar"></div></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right-hand inspector panels -->
+    <aside id="side" aria-label="Segmentation Inspector">
+      <details open id="p-rois">
+        <summary>Regions (ROIs)</summary>
+        <div class="body">
+          <div class="line">
+            <label for="groupInput">Group column</label>
+            <input id="groupInput" type="text" value="tissue" placeholder="tissue" title="Name of the output segmentation column (default: tissue)">
+          </div>
+
+          <div class="line" id="chipRow" hidden>
+            <label for="chipSelect">Chip</label>
+            <select id="chipSelect"></select>
+          </div>
+
+          <div class="roi-add-row">
+            <input id="roiColorInput" type="color" value="#ff7f0e" title="Pick color for new ROI" aria-label="New ROI color">
+            <input id="roiNameInput" type="text" placeholder="New ROI name…" aria-label="New ROI name">
+            <button id="addRoiBtn" type="button" class="primary">Add</button>
+          </div>
+
+          <div id="roiList" class="roi-list"></div>
+
+          <div class="roi-footer">
+            <span id="segTotals" class="note"></span>
+            <button id="clearSegBtn" type="button" class="btn-sm" disabled>Clear all</button>
+          </div>
+        </div>
+      </details>
+
+      <details open id="p-brush">
+        <summary>Brush &amp; Overlay</summary>
+        <div class="body">
+          <div class="line">
+            <label>Brush size</label>
+            <div class="preset-group">
+              <button type="button" class="brush-preset on" data-size="1">1×1</button>
+              <button type="button" class="brush-preset" data-size="3">3×3</button>
+              <button type="button" class="brush-preset" data-size="5">5×5</button>
+              <button type="button" class="brush-preset" data-size="7">7×7</button>
+            </div>
+          </div>
+          <div class="row">
+            <label for="brushSizeSlider">Wells</label>
+            <input id="brushSizeSlider" type="range" min="1" max="15" step="2" value="1">
+            <span id="brushSizeVal" class="val">1×1</span>
+          </div>
+          <div class="row">
+            <label for="roiAlpha">ROI opacity</label>
+            <input id="roiAlpha" type="range" min="0" max="100" step="1" value="50">
+            <span id="roiAlphaVal" class="val">50%</span>
+          </div>
+          <div class="chk-list">
+            <label class="chk"><input id="autoResetFlood" type="checkbox" checked> Auto-reset after flood fill / erase</label>
+            <label class="chk"><input id="showBorders" type="checkbox" checked> Show well grid borders</label>
+            <label class="chk"><input id="showRois" type="checkbox" checked> Show ROI overlay</label>
+            <label class="chk"><input id="showCells" type="checkbox" checked> Show cells</label>
+          </div>
+        </div>
+      </details>
+
+      <details open id="p-cells">
+        <summary>Cells &amp; Colors</summary>
+        <div class="body">
+          <div class="line">
+            <label for="colColor">Color by</label>
+            <select id="colColor"></select>
+          </div>
+
+          <div id="numericColorOpts" hidden>
+            <div class="line">
+              <label for="colormapSelect">Color scale</label>
+              <select id="colormapSelect">
+                <option value="viridis">Viridis</option>
+                <option value="plasma">Plasma</option>
+                <option value="inferno">Inferno</option>
+                <option value="magma">Magma</option>
+                <option value="cividis">Cividis</option>
+                <option value="coolwarm">Cool-Warm</option>
+              </select>
+            </div>
+            <div class="chk-row">
+              <label class="chk"><input id="clipPercentile" type="checkbox" checked> Clip 1–99%</label>
+              <label class="chk"><input id="logScale" type="checkbox"> Log scale</label>
+            </div>
+          </div>
+
+          <div id="colorLegend" class="legend-box"></div>
+
+          <div class="row">
+            <label for="cellSizeSlider">Cell size</label>
+            <input id="cellSizeSlider" type="range" min="1" max="12" step="0.5" value="3">
+            <span id="cellSizeVal" class="val">3.0 px</span>
+          </div>
+          <div class="row">
+            <label for="cellAlphaSlider">Cell opacity</label>
+            <input id="cellAlphaSlider" type="range" min="10" max="100" step="5" value="90">
+            <span id="cellAlphaVal" class="val">90%</span>
+          </div>
+          <div class="chk-list">
+            <label class="chk"><input id="yInvert" type="checkbox"> Flip Y axis</label>
+          </div>
+
+          <div class="sub-block">
+            <div class="line">
+              <label>Tissue image</label>
+              <label class="btn btn-sm" for="bgInput">Load image…</label>
+              <button id="bgClearBtn" type="button" class="btn-sm" disabled>Clear</button>
+            </div>
+            <div id="bgInfo" class="note">None loaded</div>
+            <div class="row">
+              <label for="bgAlphaSlider">Opacity</label>
+              <input id="bgAlphaSlider" type="range" min="0" max="100" step="5" value="50">
+              <span id="bgAlphaVal" class="val">50%</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details id="p-cols">
+        <summary>Columns &amp; Well Grid</summary>
+        <div class="body">
+          <div class="line"><label for="colCellId">Cell ID</label><select id="colCellId"></select></div>
+          <div class="line"><label for="colX">X coordinate</label><select id="colX"></select></div>
+          <div class="line"><label for="colY">Y coordinate</label><select id="colY"></select></div>
+          <div class="line"><label for="colWellId">Well ID</label><select id="colWellId"></select></div>
+          <div class="line"><label for="colRow">Well row</label><select id="colRow"></select></div>
+          <div class="line"><label for="colCol">Well col</label><select id="colCol"></select></div>
+          <div class="line"><label for="colChip">Chip column</label><select id="colChip"></select></div>
+
+          <div id="gridInfo" class="info">No dataset loaded.</div>
+
+          <div id="derivedGridRow" hidden>
+            <div class="row">
+              <label for="derivedBinsSlider">Grid bins</label>
+              <input id="derivedBinsSlider" type="range" min="10" max="200" step="5" value="50">
+              <span id="derivedBinsVal" class="val">50</span>
+            </div>
+            <button id="applyGridBtn" type="button" class="btn-sm">Rebuild derived grid</button>
+          </div>
+
+          <div class="sub-block">
+            <div class="line">
+              <label>Metadata</label>
+              <label class="btn btn-sm" for="metaInput">Load…</label>
+              <button id="clearMetaBtn" type="button" class="btn-sm">Clear</button>
+            </div>
+            <div id="metaInfo" class="note">Optional: JSON or value,color CSV/TSV</div>
+          </div>
+        </div>
+      </details>
+
+      <details id="p-io">
+        <summary>Import &amp; Export</summary>
+        <div class="body">
+          <div class="io-stack">
+            <button id="exportCsvBtn2" type="button" class="primary" disabled>Export cell labels (CSV)</button>
+            <button id="exportSummaryBtn2" type="button" disabled>Export ROI summary (CSV)</button>
+            <button id="saveSessionBtn2" type="button" disabled>Save session (JSON)</button>
+            <div class="io-divider"></div>
+            <button id="importSessionBtn" type="button">Load session (JSON)…</button>
+            <button id="importCsvBtn" type="button">Re-import labels (CSV)…</button>
+          </div>
+          <p class="note">Cell CSV writes one row per cell with ID, X, Y, well/chip columns, and your chosen group column (empty = unassigned). All processing runs locally offline.</p>
+        </div>
+      </details>
+    </aside>
+
+    <!-- Bottom status & zoom bar -->
+    <footer id="status" aria-live="polite">
+      <span id="statusText">Ready</span>
+      <span class="sp"></span>
+      <button id="zoomOutBtn" type="button" title="Zoom out (-)">−</button>
+      <span id="zoomLabel" class="zoom">100%</span>
+      <button id="zoomInBtn" type="button" title="Zoom in (+)">+</button>
+      <button id="zoomFitBtn" type="button" title="Fit array to view (F)">Fit</button>
+    </footer>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Keyboard shortcuts & format help overlay -->
+  <div id="helpOverlay" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="card">
+      <div class="help-head">
+        <h3 id="helpTitle">Segment — Quick Guide &amp; Shortcuts</h3>
+        <button id="helpClose" type="button">Close</button>
+      </div>
+      <div class="cols">
+        <div>
+          <h4>Tools &amp; Navigation</h4>
+          <p><kbd>B</kbd> or <kbd>P</kbd> — Paint wells (click or drag)</p>
+          <p><kbd>E</kbd> — Dedicated Erase mode (any ROI)</p>
+          <p><kbd>G</kbd> — Flood fill empty area or convert ROI</p>
+          <p><kbd>X</kbd> — Flood erase connected ROI wells</p>
+          <p><kbd>H</kbd> or hold <kbd>Space</kbd> — Pan view</p>
+          <p><kbd>[</kbd> / <kbd>]</kbd> — Shrink / grow brush size</p>
+          <p>Scroll wheel — Zoom at cursor</p>
+          <p><kbd>F</kbd> or <kbd>0</kbd> — Fit array to view</p>
+        </div>
+        <div>
+          <h4>Editing &amp; Files</h4>
+          <p><kbd>⌘/Ctrl+Z</kbd> — Undo</p>
+          <p><kbd>⌘/Ctrl+Shift+Z</kbd> or <kbd>⌘/Ctrl+Y</kbd> — Redo</p>
+          <p><kbd>⌘/Ctrl+O</kbd> — Open cell table</p>
+          <p><kbd>⌘/Ctrl+S</kbd> — Save session JSON</p>
+          <p><kbd>⌘/Ctrl+E</kbd> — Export cell segmentation CSV</p>
+          <p>Double-click any ROI name to rename it inline.</p>
+          <h4>Input Files</h4>
+          <p>Any <code>.csv</code>, <code>.tsv</code>, or whitespace <code>.txt</code> with cell ID, X/Y coordinates, optional well/array/chip columns, and covariates.</p>
+          <p>Optional metadata: JSON (<code>colors</code>, <code>meta</code>, <code>array</code>, <code>chips</code>) or 2-column <code>value,color</code> CSV/TSV.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Classic scripts, no build step; works over surveyapps://app and file:// -->
+  <script src="sample/sample-data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/wells.js"></script>
+  <script src="js/seg.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/io.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

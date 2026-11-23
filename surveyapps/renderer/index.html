@@ -36,7 +36,7 @@
             </div>
             <div class="brand-text">
               <span class="brand-name" title="SUGAR (Super Ultra Gridding Arrays Repo)">SUGAR</span>
-              <span class="brand-subtitle"><span id="app-version" class="version-pill" title="Application version">1.0.3</span></span>
+              <span class="brand-subtitle"><span id="app-version" class="version-pill" title="Application version">1.1.0</span></span>
             </div>
           </div>
 
@@ -44,7 +44,7 @@
             <span class="breadcrumb-sep">/</span>
             <h1 id="topbar-title" class="breadcrumb-current">Dashboard</h1>
             <span id="topbar-subtitle" class="topbar-subtitle">
-              Microfluidic chip alignment and well fluorescence analysis
+              Microfluidic chip alignment, fluorescence analysis, and spatial ROI segmentation
             </span>
           </div>
         </div>
@@ -102,8 +102,26 @@
           <button
             type="button"
             class="nav-item"
+            data-nav="segment"
+            title="Segment — Spatial ROI Painting &amp; Flood Segmentation (Alt+4)"
+          >
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" fill="none">
+                <rect x="3" y="3" width="6" height="6" rx="1.4" fill="currentColor" fill-opacity="0.35" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="11" y="3" width="6" height="6" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="3" y="11" width="6" height="6" rx="1.4" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="11" y="11" width="6" height="6" rx="1.4" fill="currentColor" fill-opacity="0.35" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+            </span>
+            <span class="nav-label">Segment</span>
+            <span id="nav-badge-segment" class="status-dot is-ready" title="Segment ready"></span>
+          </button>
+
+          <button
+            type="button"
+            class="nav-item"
             data-nav="help"
-            title="Methods, Shortcuts &amp; Offline Privacy Guide (Alt+4)"
+            title="Methods, Shortcuts &amp; Offline Privacy Guide (Alt+5)"
           >
             <span class="nav-icon" aria-hidden="true">
               <svg viewBox="0 0 20 20" fill="none">
@@ -176,7 +194,7 @@
             <strong>Standalone Preview Mode:</strong>
             <span>
               Launch the <strong>SUGAR</strong> desktop app to use <strong>Fluorescence Lab</strong>.
-              <strong>Grid Studio</strong> remains available in this window.
+              <strong>Grid Studio</strong> and <strong>Segment</strong> remain available in this window.
             </span>
           </div>
         </div>
@@ -200,12 +218,13 @@
                   <span id="hero-status-summary">Preparing Workspace…</span>
                 </div>
                 <h2 id="home-heading" class="hero-title">
-                  Microfluidic Grid Calibration &amp; Well Fluorescence Analysis
+                  Microfluidic Grid Calibration, Fluorescence &amp; Spatial Segmentation
                 </h2>
                 <p class="hero-description">
                   Align microscope images to calibrated microfluidic chip geometries in <strong>Grid Studio</strong>,
-                  or measure per-well channel intensities and heatmaps in <strong>Fluorescence Lab</strong>.
-                  Both tools keep your active session while you switch views.
+                  measure per-well channel intensities and heatmaps in <strong>Fluorescence Lab</strong>,
+                  or paint spatial tissue regions across million-cell datasets in <strong>Segment</strong>.
+                  All three tools keep your active session while you switch views.
                 </p>
                 <div class="hero-actions">
                   <button type="button" class="btn btn-primary" data-launch="grid">
@@ -216,6 +235,12 @@
                   </button>
                   <button type="button" class="btn btn-secondary" data-launch="microscopy">
                     <span>Open Fluorescence Lab</span>
+                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M3.5 8h9M8.5 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn btn-secondary" data-launch="segment">
+                    <span>Open Segment</span>
                     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                       <path d="M3.5 8h9M8.5 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
@@ -380,6 +405,52 @@
                   </button>
                 </div>
               </article>
+
+              <!-- Card 3: Segment -->
+              <article class="tool-card" aria-labelledby="card-segment-title">
+                <div class="tool-card-header">
+                  <div class="tool-icon-box is-cyan" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <rect x="3" y="3" width="7.5" height="7.5" rx="1.8" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="1.7"/>
+                      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+                      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+                      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8" fill="currentColor" fill-opacity="0.3" stroke="currentColor" stroke-width="1.7"/>
+                    </svg>
+                  </div>
+                  <div class="tool-header-meta">
+                    <div class="tool-title-row">
+                      <h3 id="card-segment-title" class="tool-card-title">Segment</h3>
+                      <span id="card-segment-badge" class="badge badge-ready">Ready</span>
+                    </div>
+                    <p class="tool-upstream-name">Interactive Spatial ROI Segmentation</p>
+                  </div>
+                </div>
+
+                <p class="tool-card-body">
+                  Load cell-level spatial tables (CSV/TSV/TXT), color cells by cluster or expression, and paint, erase, or flood-fill named regions of interest at well granularity—smooth even past <strong>1,000,000 cells</strong>.
+                </p>
+
+                <dl class="tool-spec-list">
+                  <div class="spec-item">
+                    <dt>Drawing</dt>
+                    <dd>Single-click or brush paint (1×1–15×15 wells), dedicated erase, 4-connected flood fill &amp; same-ROI flood erase, undo/redo.</dd>
+                  </div>
+                  <div class="spec-item">
+                    <dt>Metadata</dt>
+                    <dd>Optional JSON or <code>value,color</code> palette files and chip array geometry, plus continuous scales for numeric columns.</dd>
+                  </div>
+                  <div class="spec-item">
+                    <dt>Export</dt>
+                    <dd>Per-cell segmentation CSV, per-ROI summary CSV, and resumable session JSON (with CSV label re-import).</dd>
+                  </div>
+                </dl>
+
+                <div class="tool-card-footer">
+                  <button type="button" class="btn btn-secondary btn-block" data-launch="segment">
+                    Launch Segment
+                  </button>
+                </div>
+              </article>
             </div>
 
             <!-- Truthful Scientific Note & Workspace Status Strip -->
@@ -413,6 +484,10 @@
                   <div>
                     <dt>Grid Studio</dt>
                     <dd id="home-rt-grid">Ready</dd>
+                  </div>
+                  <div>
+                    <dt>Segment</dt>
+                    <dd id="home-rt-segment">Ready</dd>
                   </div>
                   <div>
                     <dt>Privacy &amp; Session</dt>
@@ -496,7 +571,30 @@
           ></iframe>
         </section>
 
-        <!-- ==================== VIEW 4: HELP & SCIENTIFIC REFERENCE ==================== -->
+        <!-- ==================== VIEW 4: SEGMENT (PERSISTENT IFRAME) ==================== -->
+        <section
+          id="view-segment"
+          class="view-panel view-iframe-host"
+          aria-label="Segment Workspace"
+          hidden
+        >
+          <div id="segment-overlay" class="tool-state-overlay hidden" role="status" aria-live="polite">
+            <div class="state-dialog">
+              <div class="spinner" aria-hidden="true"></div>
+              <h3 id="segment-overlay-title">Loading Segment…</h3>
+              <p id="segment-overlay-msg">Preparing spatial ROI segmentation workspace…</p>
+            </div>
+          </div>
+
+          <iframe
+            id="frame-segment"
+            class="tool-iframe"
+            title="Segment — Spatial ROI Segmentation"
+            sandbox="allow-scripts allow-same-origin allow-downloads allow-forms allow-modals"
+          ></iframe>
+        </section>
+
+        <!-- ==================== VIEW 5: HELP & SCIENTIFIC REFERENCE ==================== -->
         <section
           id="view-help"
           class="view-panel"
@@ -509,12 +607,13 @@
                 <span class="eyebrow-tag">DOCUMENTATION &amp; METHODS</span>
                 <h2 id="help-heading">SUGAR Reference Guide</h2>
                 <p>
-                  SUGAR (Super Ultra Gridding Arrays Repo) includes Grid Studio and Fluorescence Lab. This guide covers workflows, keyboard shortcuts, and privacy for both tools.
+                  SUGAR (Super Ultra Gridding Arrays Repo) includes Grid Studio, Fluorescence Lab, and Segment. This guide covers workflows, keyboard shortcuts, and privacy for all three tools.
                 </p>
               </div>
               <div class="help-quick-links">
                 <button type="button" class="btn btn-secondary" data-launch="grid">Open Grid Studio</button>
                 <button type="button" class="btn btn-secondary" data-launch="microscopy">Open Fluorescence Lab</button>
+                <button type="button" class="btn btn-secondary" data-launch="segment">Open Segment</button>
               </div>
             </header>
 
@@ -592,9 +691,35 @@
                 </ul>
               </article>
 
-              <!-- Section 3: Keyboard Shortcuts -->
+              <!-- Section 3: Segment Guide -->
               <article class="help-card">
-                <h3>3. Keyboard Shortcuts</h3>
+                <h3>3. Segment (Spatial ROI Segmentation)</h3>
+                <p class="help-lead">
+                  Offline JavaScript port of Survey Genomics' spatial ROI segmentation tool for painting and flood-filling regions across chip wells and million-cell spatial tables.
+                </p>
+                <ul class="help-list">
+                  <li>
+                    <strong>Cell Tables &amp; Metadata:</strong>
+                    Open any <code>.csv</code>, <code>.tsv</code>, or whitespace-delimited <code>.txt</code> file with one row per cell (ID, X/Y coordinates, optional well/array/chip columns such as <code>id</code>, <code>arr-row</code>, <code>arr-col</code>, <code>chip-num</code>, and categorical or numeric covariates). Load an optional JSON or 2-column <code>value,color</code> metadata file for custom palettes and chip array geometry.
+                  </li>
+                  <li>
+                    <strong>Well Granularity &amp; Interactive Tools:</strong>
+                    Uses explicit chip/well positions when present (or derives a regular well grid from cell X/Y). Paint single clicks or strokes with variable brush sizes (<code>1×1</code>–<code>15×15</code> wells), re-assign wells to another ROI, erase any ROI with dedicated Erase mode (<code>E</code>), flood-fill enclosed empty regions or convert contiguous ROIs (<code>G</code>), and flood-erase only the connected wells of one ROI (<code>X</code>). Adjust ROI overlay opacity and undo/redo any step.
+                  </li>
+                  <li>
+                    <strong>High-Capacity Local Rendering:</strong>
+                    Streams large tables directly into typed arrays with uniform-grid spatial indexing and WebGL point sprites (with automatic Canvas 2D software fallback), staying responsive past 1,000,000 cells.
+                  </li>
+                  <li>
+                    <strong>Exports &amp; Resumable Sessions:</strong>
+                    Export a standard RFC 4180 UTF-8 per-cell CSV containing cell ID, coordinates, well/chip columns, and your segmentation group column (default <code>tissue</code>; blank = unassigned), plus a per-ROI summary CSV and a resumable session JSON. Previously exported segmentation CSVs can also be re-imported onto the same cells.
+                  </li>
+                </ul>
+              </article>
+
+              <!-- Section 4: Keyboard Shortcuts -->
+              <article class="help-card">
+                <h3>4. Keyboard Shortcuts</h3>
                 <div class="shortcut-columns">
                   <div>
                     <h4>SUGAR Shell Navigation</h4>
@@ -603,7 +728,8 @@
                         <tr><td><kbd>Alt</kbd> + <kbd>1</kbd></td><td>Dashboard Home</td></tr>
                         <tr><td><kbd>Alt</kbd> + <kbd>2</kbd></td><td>Grid Studio</td></tr>
                         <tr><td><kbd>Alt</kbd> + <kbd>3</kbd></td><td>Fluorescence Lab</td></tr>
-                        <tr><td><kbd>Alt</kbd> + <kbd>4</kbd></td><td>Help &amp; Reference</td></tr>
+                        <tr><td><kbd>Alt</kbd> + <kbd>4</kbd></td><td>Segment</td></tr>
+                        <tr><td><kbd>Alt</kbd> + <kbd>5</kbd></td><td>Help &amp; Reference</td></tr>
                         <tr><td><kbd>⌘/Ctrl</kbd> + <kbd>B</kbd></td><td>Collapse / expand sidebar</td></tr>
                       </tbody>
                     </table>
@@ -623,12 +749,24 @@
                       </tbody>
                     </table>
                   </div>
+                  <div>
+                    <h4>Segment Canvas Controls</h4>
+                    <table class="shortcut-table">
+                      <tbody>
+                        <tr><td><kbd>B</kbd> / <kbd>E</kbd> / <kbd>G</kbd> / <kbd>X</kbd> / <kbd>H</kbd></td><td>Paint / Erase / Flood fill / Flood erase / Pan</td></tr>
+                        <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Shrink / grow brush size (wells)</td></tr>
+                        <tr><td><kbd>Space</kbd> + Drag / Scroll</td><td>Temporary pan / Zoom at cursor</td></tr>
+                        <tr><td><kbd>⌘/Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Shift+Z</kbd></td><td>Undo / Redo</td></tr>
+                        <tr><td><kbd>⌘/Ctrl</kbd> + <kbd>O</kbd> / <kbd>S</kbd> / <kbd>E</kbd></td><td>Open cells / Save session JSON / Export CSV</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </article>
 
-              <!-- Section 4: Offline Privacy & Security Architecture -->
+              <!-- Section 5: Offline Privacy & Security Architecture -->
               <article class="help-card">
-                <h3>4. Offline Privacy, Security &amp; Session Persistence</h3>
+                <h3>5. Offline Privacy, Security &amp; Session Persistence</h3>
                 <ul class="help-list">
                   <li>
                     <strong>100% Offline Execution:</strong>
@@ -644,7 +782,7 @@
                   </li>
                   <li>
                     <strong>Persistent Tool Sessions:</strong>
-                    Once opened, both <strong>Grid Studio</strong> and <strong>Fluorescence Lab</strong> stay mounted in persistent background frames while you switch between Dashboard, tools, and Help—preserving your loaded micrographs, sliders, and computed heatmaps throughout your session.
+                    Once opened, <strong>Grid Studio</strong>, <strong>Fluorescence Lab</strong>, and <strong>Segment</strong> stay mounted in persistent background frames while you switch between Dashboard, tools, and Help—preserving your loaded micrographs, sliders, heatmaps, and ROI segmentations throughout your session.
                   </li>
                 </ul>
               </article>

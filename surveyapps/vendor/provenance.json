@@ -1,24 +1,35 @@
 {
   "appA": {
     "url": "https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio",
-    "commit": "84271577dc4b91762cdce85c55b45f68a4e799e0",
-    "note": "Public Grid Studio files from this commit, synced with scripts/sync_grid_studio.py. Private samples are excluded."
+    "commit": "15f4e34c3e6c01ec548e9e9f172c3948e57af427",
+    "note": "Exact public Grid Studio files synced at this commit with scripts/sync_grid_studio.py. Private samples are excluded."
   },
   "appB": {
     "url": "https://github.com/zcays/Microscopy-Grid-Overlay",
     "commit": "caf7312461360903f340f55e577d16b5f86c5ac2"
   },
+  "segmentReference": {
+    "url": "https://github.com/survey-genomics/survey",
+    "commit": "a77dd6cdca80bdf31036b6a741102f0ad80e5513",
+    "paths": [
+      "src/survey/spatial/segment.py",
+      "src/survey/spatial/core.py",
+      "src/survey/spatial/segutils.py"
+    ],
+    "note": "segment/ is an offline clean-room JavaScript implementation compatible with Survey cell/well/metadata conventions and ROI segmentation semantics. No Python files from survey-genomics/survey are vendored."
+  },
   "excluded": [
     "grid-studio/samples/",
     ".claude/",
     ".agents/",
+    ".reference/",
     "unrelated essay assets"
   ],
-  "licenseNote": "No LICENSE file found in either tracked source snapshot. Local user-requested integration only; confirm redistribution rights before public distribution.",
+  "licenseNote": "Neither App A nor App B snapshots included an explicit LICENSE file. The survey-genomics/survey reference repository contains conflicting license metadata (pyproject.toml lists MIT while LICENSE.md contains proprietary terms); segment/ vendors no files from it. Third-party bundled runtimes retain their respective open-source licenses.",
   "surveyappsPatches": [
     {
       "path": "backend/microscopy_app.py",
-      "reason": "Offline initialization, desktop UI, consistency and compatibility fixes; see docs/UPSTREAM_CHANGES.md."
+      "reason": "Offline initialization, desktop UI, shared grid geometry, consistency and compatibility fixes; see docs/UPSTREAM_CHANGES.md and vendor/app-b-surveyapps.patch."
     }
   ]
 }

@@ -39,6 +39,8 @@ jobs:
       - run: python scripts/build_backend.py
       - run: python -u -X faulthandler -m unittest discover -s tests -p "test_*.py" -v
         timeout-minutes: 5
+      - run: node --test tests/segment-parser.cjs
+        timeout-minutes: 2
       - run: npx electron-builder --${{ matrix.target }} --${{ matrix.arch }} --publish never
       - run: node tests/backend-lifecycle.cjs
         timeout-minutes: 2

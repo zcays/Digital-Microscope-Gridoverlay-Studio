@@ -7,13 +7,16 @@
 (function () {
   'use strict';
 
-  var VALID_VIEWS = ['home', 'grid', 'microscopy', 'help'];
-  var DEFAULT_FALLBACK_GRID_URL = '../vendor/grid-studio/index.html';
+  var VALID_VIEWS = ['home', 'grid', 'microscopy', 'segment', 'help'];
+  var staticTools = {
+    grid: { statusKey: 'gridUrl', fallbackUrl: '../vendor/grid-studio/index.html' },
+    segment: { statusKey: 'segmentUrl', fallbackUrl: '../segment/index.html' }
+  };
 
   var VIEW_META = {
     home: {
       title: 'Dashboard',
-      subtitle: 'Microfluidic chip alignment and well fluorescence analysis'
+      subtitle: 'Microfluidic chip alignment, fluorescence analysis, and spatial ROI segmentation'
     },
     grid: {
       title: 'Grid Studio',
@@ -22,6 +25,10 @@
     microscopy: {
       title: 'Fluorescence Lab',
       subtitle: 'Well grid alignment, 8-bit channel intensity, and heatmap analysis'
+    },
+    segment: {
+      title: 'Segment',
+      subtitle: 'Interactive spatial ROI painting, flood fill, and million-cell CSV export'
     },
     help: {
       title: 'Help & Reference',
@@ -36,15 +43,14 @@
     hasBridge: false,
     retrying: false,
     unsubscribeStatus: null,
-    loadedGridUrl: null,
     loadedMicroscopyUrl: null,
-    gridActivated: false,
     microscopyActivated: false,
     status: {
       state: 'starting',
       message: 'Preparing local workspace…',
       microscopyUrl: '',
       gridUrl: '',
+      segmentUrl: '',
       version: ''
     }
   };
@@ -67,6 +73,7 @@
       home: document.getElementById('view-home'),
       grid: document.getElementById('view-grid'),
       microscopy: document.getElementById('view-microscopy'),
+      segment: document.getElementById('view-segment'),
       help: document.getElementById('view-help')
     };
 
@@ -78,39 +85,45 @@
     dom.bridgeStatusPill = document.getElementById('bridge-status-pill');
     dom.pillDot = document.getElementById('pill-dot');
     dom.pillText = document.getElementById('pill-text');
-    dom.topbarRetryBtn = document.getElementById('topbar-retry-btn');
 
     dom.fallbackBanner = document.getElementById('fallback-banner');
 
     dom.navBadgeGrid = document.getElementById('nav-badge-grid');
     dom.navBadgeMicroscopy = document.getElementById('nav-badge-microscopy');
+    dom.navBadgeSegment = document.getElementById('nav-badge-segment');
 
     dom.sidebarStatusDot = document.getElementById('sidebar-status-dot');
     dom.sidebarStatusTitle = document.getElementById('sidebar-status-title');
     dom.sidebarStatusMsg = document.getElementById('sidebar-status-msg');
-    dom.sidebarRetryBtn = document.getElementById('sidebar-retry-btn');
 
     dom.heroStatusSummary = document.getElementById('hero-status-summary');
     dom.cardGridBadge = document.getElementById('card-grid-badge');
     dom.cardMicroscopyBadge = document.getElementById('card-microscopy-badge');
-    dom.cardRetryMicroscopyBtn = document.getElementById('card-retry-microscopy-btn');
+    dom.cardSegmentBadge = document.getElementById('card-segment-badge');
 
     dom.homeRtState = document.getElementById('home-rt-state');
     dom.homeRtGrid = document.getElementById('home-rt-grid');
+    dom.homeRtSegment = document.getElementById('home-rt-segment');
     dom.homeRtMessage = document.getElementById('home-rt-message');
 
-    dom.gridOverlay = document.getElementById('grid-overlay');
-    dom.gridOverlayTitle = document.getElementById('grid-overlay-title');
-    dom.gridOverlayMsg = document.getElementById('grid-overlay-msg');
-    dom.frameGrid = document.getElementById('frame-grid');
+    Object.keys(staticTools).forEach(function (view) {
+      var tool = staticTools[view];
+      tool.frame = document.getElementById('frame-' + view);
+      tool.overlay = document.getElementById(view + '-overlay');
+      tool.activated = false;
+      tool.loadedUrl = null;
+    });
 
     dom.microscopyOverlay = document.getElementById('microscopy-overlay');
     dom.microscopySpinner = document.getElementById('microscopy-spinner');
     dom.microscopyErrorIcon = document.getElementById('microscopy-error-icon');
     dom.microscopyOverlayTitle = document.getElementById('microscopy-overlay-title');
     dom.microscopyOverlayMsg = document.getElementById('microscopy-overlay-msg');
-    dom.microscopyRetryBtn = document.getElementById('microscopy-retry-btn');
     dom.frameMicroscopy = document.getElementById('frame-microscopy');
+
+    dom.retryButtons = [
+      'sidebar-retry-btn', 'topbar-retry-btn', 'card-retry-microscopy-btn', 'microscopy-retry-btn'
+    ].map(function (id) { return document.getElementById(id); }).filter(Boolean);
   }
 
   /* ------------------------------------------------------------------------
@@ -148,7 +161,11 @@
 
     var gridUrl = typeof safe.gridUrl === 'string' && safe.gridUrl.trim()
       ? safe.gridUrl.trim()
-      : DEFAULT_FALLBACK_GRID_URL;
+      : staticTools.grid.fallbackUrl;
+
+    var segmentUrl = typeof safe.segmentUrl === 'string' && safe.segmentUrl.trim()
+      ? safe.segmentUrl.trim()
+      : staticTools.segment.fallbackUrl;
 
     var microscopyUrl = (state === 'ready' && typeof safe.microscopyUrl === 'string')
       ? safe.microscopyUrl.trim()
@@ -156,12 +173,12 @@
 
     var version = typeof safe.version === 'string' && safe.version.trim()
       ? safe.version.trim()
-      : '1.0.3';
+      : '1.1.0';
 
     var defaultMessages = {
-      starting: 'Starting Fluorescence Lab… Grid Studio is ready.',
-      ready: 'Both tools are ready. Your images stay on this computer.',
-      error: 'Fluorescence Lab could not start. Grid Studio remains available.'
+      starting: 'Starting Fluorescence Lab… Grid Studio and Segment are ready.',
+      ready: 'All three tools are ready. Your data stays on this computer.',
+      error: 'Fluorescence Lab could not start. Grid Studio and Segment remain available.'
     };
 
     var message = typeof safe.message === 'string' && safe.message.trim()
@@ -173,6 +190,7 @@
       message: message,
       microscopyUrl: microscopyUrl,
       gridUrl: gridUrl,
+      segmentUrl: segmentUrl,
       version: version
     };
   }
@@ -197,6 +215,7 @@
     setStatusDotClass(dom.sidebarStatusDot, next.state);
     setStatusDotClass(dom.navBadgeMicroscopy, next.state);
     setStatusDotClass(dom.navBadgeGrid, 'ready');
+    setStatusDotClass(dom.navBadgeSegment, 'ready');
 
     if (dom.bridgeStatusPill) {
       dom.bridgeStatusPill.className = 'status-pill is-' + next.state;
@@ -225,7 +244,7 @@
       sidebarTitle = 'Fluorescence Lab Error';
       cardBadgeText = 'Unavailable';
       cardBadgeClass = 'badge badge-error';
-      rtStateText = 'Unavailable (Grid Studio ready)';
+      rtStateText = 'Unavailable (Grid Studio & Segment ready)';
     }
 
     if (dom.pillText) dom.pillText.textContent = pillLabel;
@@ -234,13 +253,18 @@
 
     if (dom.heroStatusSummary) {
       dom.heroStatusSummary.textContent = next.state === 'ready'
-        ? 'Both Tools Ready'
-        : (next.state === 'error' ? 'Grid Studio Ready • Fluorescence Lab Unavailable' : 'Starting Fluorescence Lab…');
+        ? 'All Tools Ready'
+        : (next.state === 'error' ? 'Grid Studio & Segment Ready • Fluorescence Lab Unavailable' : 'Starting Fluorescence Lab…');
     }
 
     if (dom.cardGridBadge) {
       dom.cardGridBadge.textContent = 'Ready';
       dom.cardGridBadge.className = 'badge badge-ready';
+    }
+
+    if (dom.cardSegmentBadge) {
+      dom.cardSegmentBadge.textContent = 'Ready';
+      dom.cardSegmentBadge.className = 'badge badge-ready';
     }
 
     if (dom.cardMicroscopyBadge) {
@@ -252,17 +276,21 @@
     if (dom.homeRtGrid) {
       dom.homeRtGrid.textContent = 'Ready';
     }
+    if (dom.homeRtSegment) {
+      dom.homeRtSegment.textContent = 'Ready';
+    }
     if (dom.homeRtMessage) dom.homeRtMessage.textContent = next.message;
 
     // 3. Retry Buttons Visibility (only when bridge exists and state === 'error')
     var showRetry = appState.hasBridge && next.state === 'error';
-    toggleHidden(dom.sidebarRetryBtn, !showRetry);
-    toggleHidden(dom.topbarRetryBtn, !showRetry);
-    toggleHidden(dom.cardRetryMicroscopyBtn, !showRetry);
-    toggleHidden(dom.microscopyRetryBtn, !showRetry);
+    dom.retryButtons.forEach(function (btn) {
+      toggleHidden(btn, !showRetry);
+    });
 
     // 4. Sync Persistent Iframes
-    syncGridIframe();
+    Object.values(staticTools).forEach(function (tool) {
+      syncStaticIframe(tool);
+    });
     syncMicroscopyIframe();
   }
 
@@ -276,21 +304,17 @@
   }
 
   /* ------------------------------------------------------------------------
-     Persistent Iframe Lifecycle (Grid Studio & Fluorescence Lab)
+     Persistent Iframe Lifecycle
      ------------------------------------------------------------------------ */
-  function syncGridIframe() {
-    if (!dom.frameGrid) return;
-    var targetUrl = appState.status.gridUrl || (!appState.hasBridge ? DEFAULT_FALLBACK_GRID_URL : '');
+  function syncStaticIframe(tool, forceReload) {
+    if (!tool.frame || !tool.activated) return;
+    var targetUrl = appState.status[tool.statusKey] ||
+      (forceReload || !appState.hasBridge ? tool.fallbackUrl : '');
+    if (!targetUrl || (!forceReload && tool.loadedUrl === targetUrl)) return;
 
-    // Load lazily once user activates Grid Studio (and keep alive thereafter)
-    if (appState.gridActivated && targetUrl && appState.loadedGridUrl !== targetUrl) {
-      toggleHidden(dom.gridOverlay, false);
-      if (dom.gridOverlayTitle) dom.gridOverlayTitle.textContent = 'Loading Grid Studio…';
-      if (dom.gridOverlayMsg) dom.gridOverlayMsg.textContent = 'Preparing optical calibration workspace…';
-
-      appState.loadedGridUrl = targetUrl;
-      dom.frameGrid.src = targetUrl;
-    }
+    toggleHidden(tool.overlay, false);
+    tool.loadedUrl = targetUrl;
+    tool.frame.src = targetUrl;
   }
 
   function syncMicroscopyIframe() {
@@ -362,13 +386,12 @@
   }
 
   function setupIframeListeners() {
-    if (dom.frameGrid) {
-      dom.frameGrid.addEventListener('load', function () {
-        if (appState.loadedGridUrl) {
-          toggleHidden(dom.gridOverlay, true);
-        }
+    Object.values(staticTools).forEach(function (tool) {
+      if (!tool.frame) return;
+      tool.frame.addEventListener('load', function () {
+        if (tool.loadedUrl) toggleHidden(tool.overlay, true);
       });
-    }
+    });
 
     if (dom.frameMicroscopy) {
       dom.frameMicroscopy.addEventListener('load', function () {
@@ -425,13 +448,13 @@
     if (dom.topbarSubtitle) dom.topbarSubtitle.textContent = meta.subtitle;
 
     // Show tool session controls when viewing an embedded tool
-    var isToolView = viewName === 'grid' || viewName === 'microscopy';
-    toggleHidden(dom.topbarToolControls, !isToolView);
+    var staticTool = staticTools[viewName];
+    toggleHidden(dom.topbarToolControls, !staticTool && viewName !== 'microscopy');
 
     // Lazily activate persistent iframes on first navigation
-    if (viewName === 'grid') {
-      appState.gridActivated = true;
-      syncGridIframe();
+    if (staticTool) {
+      staticTool.activated = true;
+      syncStaticIframe(staticTool);
     } else if (viewName === 'microscopy') {
       appState.microscopyActivated = true;
       syncMicroscopyIframe();
@@ -455,11 +478,9 @@
   }
 
   function reloadActiveTool() {
-    if (appState.currentView === 'grid' && dom.frameGrid) {
-      var gridSrc = appState.status.gridUrl || DEFAULT_FALLBACK_GRID_URL;
-      appState.loadedGridUrl = gridSrc;
-      toggleHidden(dom.gridOverlay, false);
-      dom.frameGrid.src = gridSrc;
+    var staticTool = staticTools[appState.currentView];
+    if (staticTool) {
+      syncStaticIframe(staticTool, true);
     } else if (appState.currentView === 'microscopy' && dom.frameMicroscopy) {
       if (appState.status.state === 'ready' && appState.status.microscopyUrl) {
         toggleHidden(dom.microscopyOverlay, false);
@@ -505,8 +526,26 @@
       state: 'starting',
       message: 'Restarting Fluorescence Lab…',
       gridUrl: appState.status.gridUrl,
+      segmentUrl: appState.status.segmentUrl,
       version: appState.status.version
     });
+
+    function finishRetry(latestStatus) {
+      appState.retrying = false;
+      setRetryButtonsDisabled(false);
+      if (latestStatus) applyStatus(latestStatus);
+    }
+
+    function failRetry(err) {
+      finishRetry();
+      applyStatus({
+        state: 'error',
+        message: err && err.message ? err.message : 'Fluorescence Lab retry failed.',
+        gridUrl: appState.status.gridUrl,
+        segmentUrl: appState.status.segmentUrl,
+        version: appState.status.version
+      });
+    }
 
     safeThen(
       function () {
@@ -518,47 +557,20 @@
             function () {
               return window.surveyapps.getStatus();
             },
-            function (latestStatus) {
-              appState.retrying = false;
-              setRetryButtonsDisabled(false);
-              if (latestStatus) {
-                applyStatus(latestStatus);
-              }
-            },
-            function (err) {
-              appState.retrying = false;
-              setRetryButtonsDisabled(false);
-              var errMsg = err && err.message ? err.message : 'Fluorescence Lab retry failed.';
-              applyStatus({
-                state: 'error',
-                message: errMsg,
-                gridUrl: appState.status.gridUrl,
-                version: appState.status.version
-              });
-            }
+            finishRetry,
+            failRetry
           );
         } else {
-          appState.retrying = false;
-          setRetryButtonsDisabled(false);
+          finishRetry();
         }
       },
-      function (err) {
-        appState.retrying = false;
-        setRetryButtonsDisabled(false);
-        var errMsg = err && err.message ? err.message : 'Fluorescence Lab retry failed.';
-        applyStatus({
-          state: 'error',
-          message: errMsg,
-          gridUrl: appState.status.gridUrl,
-          version: appState.status.version
-        });
-      }
+      failRetry
     );
   }
 
   function setRetryButtonsDisabled(disabled) {
-    [dom.sidebarRetryBtn, dom.topbarRetryBtn, dom.cardRetryMicroscopyBtn, dom.microscopyRetryBtn].forEach(function (btn) {
-      if (btn) btn.disabled = Boolean(disabled);
+    dom.retryButtons.forEach(function (btn) {
+      btn.disabled = disabled;
     });
   }
 
@@ -578,7 +590,7 @@
       applyStatus({
         state: 'error',
         message: 'Launch the SUGAR desktop application to use Fluorescence Lab.',
-        gridUrl: DEFAULT_FALLBACK_GRID_URL,
+        gridUrl: staticTools.grid.fallbackUrl,
         version: '1.0.0'
       });
       return;
@@ -615,8 +627,8 @@
         applyStatus({
           state: 'error',
           message: msg,
-          gridUrl: appState.status.gridUrl || DEFAULT_FALLBACK_GRID_URL,
-          version: appState.status.version || '1.0.3'
+          gridUrl: appState.status.gridUrl || staticTools.grid.fallbackUrl,
+          version: appState.status.version || '1.1.0'
         });
       }
     );
@@ -654,14 +666,12 @@
       dom.reloadActiveToolBtn.addEventListener('click', reloadActiveTool);
     }
 
-    [dom.sidebarRetryBtn, dom.topbarRetryBtn, dom.cardRetryMicroscopyBtn, dom.microscopyRetryBtn].forEach(function (btn) {
-      if (btn) {
-        btn.addEventListener('click', handleRetryBackend);
-      }
+    dom.retryButtons.forEach(function (btn) {
+      btn.addEventListener('click', handleRetryBackend);
     });
 
     window.addEventListener('keydown', function (e) {
-      // Alt+1..4 switches top-level views
+      // Alt+1..5 switches top-level views
       if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         if (e.key === '1') {
           e.preventDefault();
@@ -673,6 +683,9 @@
           e.preventDefault();
           navigateTo('microscopy');
         } else if (e.key === '4') {
+          e.preventDefault();
+          navigateTo('segment');
+        } else if (e.key === '5') {
           e.preventDefault();
           navigateTo('help');
         }

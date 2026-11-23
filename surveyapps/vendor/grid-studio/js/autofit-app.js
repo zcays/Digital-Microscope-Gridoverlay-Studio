@@ -10,7 +10,20 @@
 
 let afUndoState = null;
 const afSnapshot = () => ({arrayOnly: S.chip.arrayOnly, lens: {...S.lens}, img: {x: S.img.x, y: S.img.y, scale: S.img.scale, rot: S.img.rot}, warp: JSON.parse(JSON.stringify(S.warp))});
-function afRestore(s) { S.chip.arrayOnly = s.arrayOnly; if (s.layout) { Object.assign(S.chip, s.layout.chip); Object.assign(S.doc, s.layout.doc); S.zoom = s.layout.zoom; refresh('grid', 'layout', 'crop'); } Object.assign(S.lens, s.lens); Object.assign(S.img, s.img); Object.assign(S.warp, JSON.parse(JSON.stringify(s.warp))); refresh('gl', 'warp', 'crop', 'status'); }
+function afRestore(s) {
+  const layers = ['gl', 'warp', 'crop', 'status'];
+  S.chip.arrayOnly = s.arrayOnly;
+  if (s.layout) {
+    Object.assign(S.chip, s.layout.chip);
+    Object.assign(S.doc, s.layout.doc);
+    S.zoom = s.layout.zoom;
+    layers.push('grid', 'layout');
+  }
+  Object.assign(S.lens, s.lens);
+  Object.assign(S.img, s.img);
+  Object.assign(S.warp, JSON.parse(JSON.stringify(s.warp)));
+  refresh(...layers);
+}
 /** Current image settings as a parameter vector (the inverse of afApply). */
 function afCurrent() {
   const c = S.warp.c, d = S.warp.dev;
@@ -20,9 +33,7 @@ function afCurrent() {
 function afApply(res, distortionOnly) {
   const t = res.th;
   if (!distortionOnly) { Object.assign(S.lens, {k1: t[AF_K1], k2: t[AF_K2], bypass: false}); Object.assign(S.img, {rot: t[AF_ROT], scale: t[AF_SCALE], x: t[AF_X], y: t[AF_Y]}); }
-  Object.assign(S.warp, {enabled: true, mesh: res.mesh,
-    c: {nw: {x: t[6], y: t[7]}, ne: {x: 1 + t[8], y: t[9]}, se: {x: 1 + t[10], y: 1 + t[11]}, sw: {x: t[12], y: 1 + t[13]}},
-    dev: {n: {x: t[14], y: t[15]}, e: {x: t[16], y: t[17]}, s: {x: t[18], y: t[19]}, w: {x: t[20], y: t[21]}}});
+  Object.assign(S.warp, afWarpHandles(t), {enabled: true, mesh: res.mesh});
   refresh('gl', 'warp', 'status');
 }
 
@@ -67,13 +78,24 @@ function afMessage(res, distortionOnly) {
 }
 /** Button / shortcut entry points: show progress and the outcome. */
 function afRunCorners(pts, onDone, preserveShape = false) { afRun(false, () => autoFitFromCorners(pts, preserveShape), onDone); }
+function afSetInfo(text) {
+  for (const id of ['#autoFitInfo', '#warpFixInfo']) {
+    const el = $(id);
+    if (el) el.textContent = text;
+  }
+}
 function afRun(distortionOnly, run = () => autoFitNow(distortionOnly), onDone) {
-  const say = t => { for (const id of ['#autoFitInfo', '#warpFixInfo']) { const e = $(id); if (e) e.textContent = t; } };
-  say('Analysing the picture…'); toast('Analysing the picture…');
+  afSetInfo('Analysing the picture…'); toast('Analysing the picture…');
   setTimeout(() => {                                               // let the message paint before the heavy work
     let res; try { res = run(); } catch (err) { console.error(err); res = {ok: false, reason: 'An internal error occurred (see the browser console).'}; }
-    const msg = afMessage(res, distortionOnly); toast(msg); say(msg); syncAll(); if (onDone) onDone(res);
+    const msg = afMessage(res, distortionOnly); toast(msg); afSetInfo(msg); syncAll(); if (onDone) onDone(res);
   }, 40);
 }
 const autoFit = () => afRun(false), autoFixDistortion = () => afRun(true);
-function undoAutoFit() { if (!afUndoState) return; afRestore(afUndoState); afUndoState = null; for (const id of ['#autoFitInfo', '#warpFixInfo']) { const e = $(id); if (e) e.textContent = 'Undone.'; } syncAll(); }
+function undoAutoFit() {
+  if (!afUndoState) return;
+  const before = afUndoState;
+  afUndoState = null;
+  afRestore(before);
+  afSetInfo('Undone.');
+}

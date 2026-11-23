@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Segment Self-tests</title>
+  <style>
+    body { font: 13px/1.5 ui-monospace, Menlo, monospace; background: #0c1014; color: #d6e2ec; padding: 16px; }
+    .ok { color: #63db8c; }
+    .bad { color: #ff5c5c; font-weight: 700; }
+    h1 { font: 600 16px -apple-system, sans-serif; color: #eef4f8; }
+    iframe { position: absolute; left: -9999px; width: 1200px; height: 800px; border: 0; }
+  </style>
+</head>
+<body>
+  <h1>SUGAR Segment — Self-tests</h1>
+  <div id="out">running…</div>
+  <iframe id="app" src="index.html"></iframe>
+  <iframe id="cpuApp" src="index.html?renderer=cpu"></iframe>
+  <script>
+  'use strict';
+  const frame = document.getElementById('app');
+  const cpuFrame = document.getElementById('cpuApp');
+  const out = document.getElementById('out');
+  const results = [];
+  const run = (win, code) => win.eval(code);
+  const near = (a, b, tol = 1e-5) => Math.abs(a - b) <= tol;
+
+  async function test(name, fn) {
+    try {
+      const r = await fn();
+      results.push([name, r === undefined || r === true, r === false ? 'returned false' : '']);
+    } catch (e) {
+      results.push([name, false, e && e.message ? e.message : String(e)]);
+    }
+  }
+
+  let loadedCount = 0;
+  function onFrameReady() {
+    loadedCount++;
+    if (loadedCount < 2) return;
+    setTimeout(runSuite, 50);
+  }
+  frame.onload = onFrameReady;
+  cpuFrame.onload = onFrameReady;
+
+  async function runSuite() {
+    const w = frame.contentWindow;
+    const E = code => run(w, code);
+    const cw = cpuFrame.contentWindow;
+    const CE = code => run(cw, code);
+
+    // ---- 1. Parser: delimiters, RFC 4180 quotes, header auto-detection ----
+    await test('parser: auto-detects comma, tab, semicolon, and whitespace delimiters', () => {
+      const csv = 'cell_id,x,y,leiden\nc1,10,20,0\nc2,30,40,1\n';
+      const tsv = 'cell_id\tx\ty\tleiden\nc1\t10\t20\t0\nc2\t30\t40\t1\n';
+      const semi = 'cell_id;x;y;leiden\nc1;10;20;0\nc2;30;40;1\n';
+      const ws = 'cell_id   x   y   leiden\nc1   10   20   0\nc2   30   40   1\n';
+      const r1 = w.parseTableSync(csv);
+      const r2 = w.parseTableSync(tsv);
+      const r3 = w.parseTableSync(semi);
+      const r4 = w.parseTableSync(ws);
+      return r1.delimiter === ',' && r1.rowCount === 2 && r1.columns[1].num[1] === 30 &&
+        r2.delimiter === '\t' && r2.rowCount === 2 &&
+        r3.delimiter === ';' && r3.rowCount === 2 &&
+        r4.isWhitespace === true && r4.rowCount === 2 && r4.columns[2].num[0] === 20;
+    });
+
+    await test('parser: handles RFC 4180 quoted fields, escaped quotes, embedded commas & newlines', () => {
+      const csv = 'cell_id,x,y,cell_type\n' +
+        '"cell,1",12.5,24.5,"T cell, ""CD4+"""\n' +
+        '"cell\n2",32.5,44.5,"B cell, naive"\n';
+      const r = w.parseTableSync(csv);
+      const c0 = w.getColumnString(r.columns[0], 0);
+      const c1 = w.getColumnString(r.columns[0], 1);
+      const t0 = w.getColumnString(r.columns[3], 0);
+      const t1 = w.getColumnString(r.columns[3], 1);
+      return r.rowCount === 2 && c0 === 'cell,1' && c1 === 'cell\n2' &&
+        t0 === 'T cell, "CD4+"' && t1 === 'B cell, naive' &&
+        near(r.columns[1].num[0], 12.5) && near(r.columns[2].num[1], 44.5);
+    });
+
+    await test('parser: detects headerless numeric/id files cleanly', () => {
+      const noHdr = 'BC01,100.5,200.5,A\nBC02,150.5,250.5,B\nBC03,200.5,300.5,A\n';
+      const r = w.parseTableSync(noHdr);
+      return r.hasHeader === false && r.rowCount === 3 && r.columns[1].num[0] === 100.5 &&
+        r.colMap.x === 1 && r.colMap.y === 2;
+    });
+
+    await test('parser: auto-detects Survey columns (cell_id, X_survey_0/1, id=well, arr-row/col, chip-num, leiden)', () => {
+      const tsv = [
+        'cbc\tX_survey_0\tX_survey_1\tid\tarr-row\tarr-col\tchip-num\tleiden\tn_counts',
+        'AA-1\t85\t-85\t0\t0\t0\t485\t0\t1200',
+        'AC-1\t85\t-285\t1\t1\t0\t485\t1\t2400',
+        'AG-1\t285\t-85\t2\t0\t1\t492\t0\t1800',
+      ].join('\n');
+      const r = w.parseTableSync(tsv);
+      const m = r.colMap;
+      return m.cellId === 0 && m.x === 1 && m.y === 2 && m.wellId === 3 &&
+        m.row === 4 && m.col === 5 && m.chip === 6 && m.color === 7;
+    });
+
+    await test('parser: parses JSON metadata (colors, Survey meta, array, Scanpy _colors) and 2-column value,color CSV', () => {
+      const m1 = w.parseMetadataText(JSON.stringify({
+        colors: { cell_type: { Alpha: '#112233', Beta: 'red' } },
+        meta: { leiden: { '0': { color: '#445566' } } },
+        ct2_colors: ['#778899', '#aabbcc'],
+        array: { n: 4, s: 170, w: 30, arr_shape: [10, 12] },
+        group: 'region_x',
+      }), 'meta.json');
+      const m2 = w.parseMetadataText('value,color\nT cell,#ff00aa\nB cell,"rgb(10, 20, 30)"\n', 'colors.csv');
+      const m3 = w.parseMetadataText('cell_type,color\nT cell,#00ff00\n', 'ct.csv');
+      const m4 = w.parseMetadataText('value\tcolor\nNK cell\trgb(10, 20, 30)\n', 'colors.tsv');
+      return m1.colorsByCol.cell_type.Alpha === '#112233' &&
+        m1.colorsByCol.cell_type.Beta === '#e53935' &&
+        m1.colorsByCol.leiden['0'] === '#445566' &&
+        m1.colorsByCol.ct2['1'] === '#aabbcc' &&
+        m1.array.arr_shape[0] === 10 && m1.array.arr_shape[1] === 12 &&
+        m1.group === 'region_x' &&
+        m2.flatColors['T cell'] === '#ff00aa' && m2.flatColors['B cell'] === '#0a141e' &&
+        m3.colorsByCol.cell_type['T cell'] === '#00ff00' &&
+        m4.flatColors['NK cell'] === '#0a141e';
+    });
+
+    // ---- 2. Array geometry & exact closest-well mapping (vs brute-force cdist) ----
+    await test('wells: Array tessellation matches survey/spatial/core.py (column-major IDs, square & hex)', () => {
+      const sq = w.generateArrayGeometry({ n: 4, s: 170, w: 30, arr_shape: [5, 6], origin: 'corner' });
+      const hx = w.generateArrayGeometry({ n: 6, s: 100, w: 20, arr_shape: [4, 4], origin: 'corner' });
+      // Column-major: col=1, row=2 -> id = 1*5 + 2 = 7
+      const id12 = sq.gridToWell[2 * 6 + 1];
+      return sq.count === 30 && id12 === 7 && sq.row[7] === 2 && sq.col[7] === 1 &&
+        near(sq.cx[7] - sq.cx[0], 200, 1e-4) && near(sq.cy[7] - sq.cy[0], -400, 1e-4) &&
+        hx.count === 16 && hx.shape === 'hex' && hx.verts.length === 16 * 12;
+    });
+
+    await test('wells: UniformGridIndex.closest() matches brute-force Euclidean cdist+argmin on 200 random points (square & hex)', () => {
+      const UGI = E('UniformGridIndex');
+      for (const n of [4, 6]) {
+        const g = w.generateArrayGeometry({ n, s: 100, w: 25, arr_shape: [12, 14], origin: 'corner' });
+        const sp = new UGI(g.cx, g.cy, g.count, g.minX, g.maxX, g.minY, g.maxY, g.pitchX * 2);
+        let seed = 1337 + n;
+        const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+        const qx = [], qy = [];
+        for (let i = 0; i < 200; i++) {
+          const x = g.minX - 100 + rand() * (g.maxX - g.minX + 200);
+          const y = g.minY - 100 + rand() * (g.maxY - g.minY + 200);
+          qx.push(x); qy.push(y);
+          const fast = sp.closest(x, y);
+          let brute = 0, bestD2 = Infinity;
+          for (let j = 0; j < g.count; j++) {
+            const d2 = (g.cx[j] - x) ** 2 + (g.cy[j] - y) ** 2;
+            if (d2 < bestD2) { bestD2 = d2; brute = j; }
+          }
+          if (fast !== brute) return false;
+        }
+        g.spatial = sp;
+        const uniq = w.closestWells(g, qx, qy);
+        if (uniq.length === 0) return false;
+      }
+      return true;
+    });
+
+    await test('wells: derives regular well grid cleanly when input has only (cell_id, x, y, covariate)', () => {
+      const lines = ['cell_id,x,y,cluster'];
+      for (let i = 0; i < 100; i++) lines.push(`c${i},${(i % 10) * 10},${Math.floor(i / 10) * 10},cl${i % 3}`);
+      const ds = w.parseTableSync(lines.join('\n'));
+      const idxs = Int32Array.from({ length: 100 }, (_, i) => i);
+      const wells = w.buildChipWells(ds, idxs, 'default', {}, { mode: 'bins', targetBins: 10 });
+      let sum = 0;
+      for (let i = 0; i < wells.wellCellCount.length; i++) sum += wells.wellCellCount[i];
+      return wells.mode === 'derived' && wells.nRows === 10 && wells.nCols === 10 && sum === 100;
+    });
+
+    // ---- 3. Segmentation semantics vs survey/spatial/segment.py ----
+    await test('seg: fill, re-assign to another ROI, dedicated erase (any ROI), and variable 1x1/3x3/5x5 brush', () => {
+      const UGI = E('UniformGridIndex');
+      const g = w.generateArrayGeometry({ n: 4, s: 100, w: 20, arr_shape: [10, 10], origin: 'corner' });
+      g.spatial = new UGI(g.cx, g.cy, g.count, g.minX, g.maxX, g.minY, g.maxY, 240);
+      g.wellCellCount = new Uint32Array(g.count).fill(5);
+      const cs = w.createChipSegState(g);
+      const rA = w.createRoi(cs, 'ROI A', '#1f77b4');
+      const rB = w.createRoi(cs, 'ROI B', '#ff7f0e');
+      const wAt = (r, c) => g.gridToWell[r * 10 + c];
+
+      // 3x3 brush at (5,5) -> 9 wells in ROI A (45 cells)
+      const b3 = w.getBrushWells(g, wAt(5, 5), 3);
+      w.applyWellAssignments(cs, b3, rA.id);
+      if (b3.length !== 9 || rA.wellCount !== 9 || rA.cellCount !== 45) return false;
+
+      // Re-assign center well (5,5) to ROI B -> A has 8 wells, B has 1 well
+      w.applyWellAssignments(cs, [wAt(5, 5)], rB.id);
+      if (rA.wellCount !== 8 || rB.wellCount !== 1 || cs.wellRoi[wAt(5, 5)] !== rB.id) return false;
+
+      // Dedicated Erase with ROI B active erases BOTH ROI A and ROI B wells in a 5x5 brush!
+      cs.activeRoiId = rB.id;
+      const b5 = w.getBrushWells(g, wAt(5, 5), 5);
+      w.applyWellAssignments(cs, b5, 0);
+      return b5.length === 25 && rA.wellCount === 0 && rB.wellCount === 0 && rA.cellCount === 0;
+    });
+
+    await test('seg: flood fill (4-connected enclosed area, barriers, flood-convert) & flood erase (same-ROI only)', () => {
+      const g = w.generateArrayGeometry({ n: 4, s: 100, w: 20, arr_shape: [7, 7], origin: 'corner' });
+      g.wellCellCount = new Uint32Array(g.count).fill(2);
+      const cs = w.createChipSegState(g);
+      const rWall = w.createRoi(cs, 'Wall', '#1f77b4');
+      const rFill = w.createRoi(cs, 'Interior', '#ff7f0e');
+      const rConv = w.createRoi(cs, 'Converted', '#279e68');
+      const wAt = (r, c) => g.gridToWell[r * 7 + c];
+
+      // Paint a closed 5x5 ring (rows 1..5, cols 1..5 border) with Wall, leaving 3x3 interior (rows 2..4, cols 2..4) unassigned
+      const ring = [];
+      for (let i = 1; i <= 5; i++) {
+        ring.push(wAt(1, i), wAt(5, i), wAt(i, 1), wAt(i, 5));
+      }
+      w.applyWellAssignments(cs, ring, rWall.id);
+      if (rWall.wellCount !== 16) return false;
+
+      // Flood fill inside the ring at (3,3) with Interior -> fills ONLY the 9 interior wells (stops at Wall!)
+      cs.activeRoiId = rFill.id;
+      const filled = w.runFloodAction(cs, wAt(3, 3), 'flood_fill');
+      if (filled !== 9 || rFill.wellCount !== 9 || cs.wellRoi[wAt(0, 0)] !== 0) return false;
+
+      // Check strict 4-connectivity (connectivity=1): add a diagonally touching Interior well at (0,0) and (1,1)...
+      // Actually place an Interior well at (0,0) and verify flood erase at (3,3) does NOT touch Wall or disconnected (0,0)!
+      w.applyWellAssignments(cs, [wAt(0, 0)], rFill.id);
+      // Flood Convert on Interior (3,3) using Converted -> converts ONLY the 9 connected wells, NOT (0,0) and NOT Wall!
+      cs.activeRoiId = rConv.id;
+      const conv = w.runFloodAction(cs, wAt(3, 3), 'flood_fill');
+      if (conv !== 9 || rConv.wellCount !== 9 || rFill.wellCount !== 1 || rWall.wellCount !== 16) return false;
+
+      // Flood Erase on Converted (3,3) while Wall is active -> erases ONLY Converted (9 wells), leaving Wall (16) and Interior (1) untouched!
+      cs.activeRoiId = rWall.id;
+      const erased = w.runFloodAction(cs, wAt(3, 3), 'flood_erase');
+      // Flood Erase on empty well (3,3) -> no-op (0)
+      const noop = w.runFloodAction(cs, wAt(3, 3), 'flood_erase');
+      return erased === 9 && noop === 0 && rConv.wellCount === 0 && rWall.wellCount === 16 && rFill.wellCount === 1;
+    });
+
+    await test('seg: Undo and Redo restore well assignments, counts, ROI renames/recolors/deletes, and truncate redo tail', () => {
+      const g = w.generateArrayGeometry({ n: 4, s: 100, w: 20, arr_shape: [5, 5], origin: 'corner' });
+      g.wellCellCount = new Uint32Array(g.count).fill(3);
+      const cs = w.createChipSegState(g);
+      const r1 = w.createRoi(cs, 'Alpha', '#1f77b4', true);
+      const d1 = w.applyWellAssignments(cs, [0, 1, 2], r1.id);
+      w.pushHistory(cs, { label: 'paint', delta: d1, roisBefore: null, roisAfter: null, activeBefore: r1.id, activeAfter: r1.id });
+      w.renameRoi(cs, r1.id, 'AlphaRenamed');
+      w.deleteRoi(cs, r1.id);
+      if (cs.rois.length !== 0 || cs.wellRoi[0] !== 0) return false;
+
+      // Undo delete -> restores AlphaRenamed and its 3 wells
+      w.undoSeg(cs);
+      if (cs.rois.length !== 1 || cs.rois[0].name !== 'AlphaRenamed' || cs.rois[0].wellCount !== 3 || cs.rois[0].cellCount !== 9) return false;
+
+      // Undo rename -> back to Alpha
+      w.undoSeg(cs);
+      if (cs.rois[0].name !== 'Alpha') return false;
+
+      // Undo paint -> 0 wells
+      w.undoSeg(cs);
+      if (cs.rois[0].wellCount !== 0 || cs.wellRoi[0] !== 0) return false;
+
+      // Redo paint -> 3 wells restored
+      w.redoSeg(cs);
+      if (cs.rois[0].wellCount !== 3 || cs.wellRoi[2] !== r1.id) return false;
+
+      // New action truncates redo stack
+      w.createRoi(cs, 'Beta', '#ff7f0e', true);
+      return !w.canRedo(cs) && cs.rois.length === 2;
+    });
+
+    // ---- 4. End-to-end sample load, CSV export round-trip, summary CSV, and Session JSON ----
+    await test('workspace: metadata loaded first survives a failed cell import and applies to the first valid table', async () => {
+      const metadata = new w.File([JSON.stringify({
+        group: 'regions', cell_size: 5, rois: [{ name: 'First ROI', color: '#112233' }],
+      })], 'first.json');
+      await w.loadMetadataFile(metadata);
+      await w.loadCellSource('cell_id,x,y\nc1,bad,2', { fileName: 'invalid.csv' });
+      if (E('S.data.rowCount') !== 0 || E('S.meta.fileName') !== 'first.json') return false;
+      await w.loadCellSource('cell_id,x,y\nc1,1,2\nc2,3,4', { fileName: 'first.csv' });
+      return E('S.meta.fileName') === 'first.json' && E('S.group') === 'regions' && E('S.display.cellSize') === 5 &&
+        w.activeChipState().rois[0].name === 'First ROI';
+    });
+
+    await test('app: loads built-in synthetic sample with metadata & paints/floods/exports/re-imports CSV + Session JSON cleanly', async () => {
+      await w.loadBuiltInSample();
+      const cs = w.activeChipState();
+      if (!cs || E('S.data.rowCount') < 1000 || cs.wells.count !== 400) return false;
+
+      // Create ROI with comma & quote in name to verify RFC 4180 export & re-import round-trip!
+      const rSpecial = w.createRoi(cs, 'Tumor, "Core"', '#ff453a', true);
+      const cortex = cs.rois.find(r => r.name === 'Cortex');
+      w.applyWellAssignments(cs, [0, 1, 2, 20, 21], cortex.id);
+      w.applyWellAssignments(cs, [105, 106, 125, 126], rSpecial.id);
+      w.refresh('overlay', 'rois', 'status');
+
+      // Primary cell CSV export
+      const built = w.buildCellSegmentationCsvParts();
+      const csvText = built.parts.join('');
+      const parsedOut = w.parseTableSync(csvText);
+      const groupColIdx = parsedOut.headers.indexOf(E('S.group'));
+      if (groupColIdx === -1 || parsedOut.rowCount !== E('S.data.rowCount')) return false;
+
+      // Verify summary CSV columns & totals
+      const summary = w.buildRoiSummaryCsvText();
+      const sumParsed = w.parseTableSync(summary.text);
+      const sumHeaders = sumParsed.headers.join(',');
+      if (sumHeaders !== 'roi,color,cell_count,well_count') return false;
+
+      // Save Session JSON before clearing
+      const snap = w.buildSessionSnapshot();
+      const expectedWellRoi = Array.from(cs.wellRoi);
+
+      // Clear & re-import primary CSV -> assert every populated well matches!
+      w.clearChipSegmentation(cs);
+      if (cortex.wellCount !== 0) return false;
+      const imp = await w.importSegmentationCsv(csvText, built.filename);
+      if (imp.matchedCells !== E('S.data.rowCount') || imp.labeledWells === 0) return false;
+
+      // Check every cell's exported ROI label matches after CSV re-import
+      const reBuilt = w.buildCellSegmentationCsvParts().parts.join('');
+      if (reBuilt !== csvText) return false;
+
+      // Clear & restore Session JSON -> exact well-for-well match (including empty wells!)
+      w.clearChipSegmentation(cs);
+      const sessRes = w.applySessionSnapshot(snap);
+      const restoredWellRoi = Array.from(cs.wellRoi);
+      // Compare ROI names per well (IDs may be reassigned sequentially on restore)
+      for (let i = 0; i < expectedWellRoi.length; i++) {
+        const expId = expectedWellRoi[i];
+        const actId = restoredWellRoi[i];
+        if ((expId === 0) !== (actId === 0)) return false;
+      }
+      return sessRes.restoredWells === 9 && sessRes.restoredRois >= 2;
+    });
+
+    await test('renderer: software fallback (?renderer=cpu) renders non-blank cells & ROI overlay without errors', async () => {
+      await cw.loadBuiltInSample();
+      const cs = cw.activeChipState();
+      cw.applyWellAssignments(cs, [100, 101, 102, 120, 121, 122], cs.rois[0].id);
+      cw.refresh('cellColors', 'cells', 'overlay', 'status');
+      const cellCtx = cw.document.getElementById('cellCanvas').getContext('2d');
+      const ovCtx = cw.document.getElementById('overlayCanvas').getContext('2d');
+      const cd = cellCtx.getImageData(0, 0, cellCtx.canvas.width, cellCtx.canvas.height).data;
+      const od = ovCtx.getImageData(0, 0, ovCtx.canvas.width, ovCtx.canvas.height).data;
+      let cellPx = 0, ovPx = 0;
+      for (let i = 3; i < cd.length; i += 16) if (cd[i] > 0) cellPx++;
+      for (let i = 3; i < od.length; i += 16) if (od[i] > 0) ovPx++;
+      return CE('S.renderer') === 'cpu' && cellPx > 100 && ovPx > 50;
+    });
+
+    // ---- 4b. Multi-chip isolation & export ----
+    await test('app: multi-chip datasets keep independent ROIs/well grids per chip and export combined CSV + chip summary', () => {
+      const tsv = [
+        'cell_id\tx\ty\tid\tarr-row\tarr-col\tchip-num\tleiden',
+        'A1\t10\t10\t0\t0\t0\t485\t0',
+        'A2\t30\t10\t1\t0\t1\t485\t1',
+        'B1\t10\t10\t0\t0\t0\t492\t0',
+        'B2\t30\t10\t1\t0\t1\t492\t1',
+      ].join('\n');
+      w.applyLoadedDataset(w.parseTableSync(tsv, { fileName: 'multi.tsv' }));
+      const cs485 = E('S.chipStates.get("485")');
+      const cs492 = E('S.chipStates.get("492")');
+      const r485 = w.createRoi(cs485, 'LeftChipROI', '#1f77b4', false);
+      const r492 = w.createRoi(cs492, 'RightChipROI', '#ff7f0e', false);
+      w.applyWellAssignments(cs485, [cs485.wells.wellIdToIdx.get('0')], r485.id);
+      w.applyWellAssignments(cs492, [cs492.wells.wellIdToIdx.get('1')], r492.id);
+      const csv = w.buildCellSegmentationCsvParts().parts.join('');
+      const parsed = w.parseTableSync(csv);
+      const segCol = parsed.columns[parsed.headers.indexOf(E('S.group'))];
+      const sum = w.buildRoiSummaryCsvText().text;
+      return E('S.chips.list.length') === 2 &&
+        w.getColumnString(segCol, 0) === 'LeftChipROI' &&
+        w.getColumnString(segCol, 1) === '' &&
+        w.getColumnString(segCol, 2) === '' &&
+        w.getColumnString(segCol, 3) === 'RightChipROI' &&
+        sum.startsWith('chip,roi,color,cell_count,well_count\n');
+    });
+
+    // ---- Segment workspace and import regressions ----
+    const check = (condition, message) => { if (!condition) throw new Error(message); };
+    const selectColumn = (id, header) => {
+      const select = w.document.getElementById(id);
+      select.value = String(E('S.data.headers').indexOf(header));
+      select.dispatchEvent(new w.Event('change'));
+    };
+    const labelAt = (chip, row) => chip.roiById.get(chip.wellRoi[chip.wells.cellWellIdx[row]])?.name || '';
+    const expectFailure = async (operation, pattern) => {
+      try {
+        await operation();
+      } catch (error) {
+        check(pattern.test(error.message), error.message);
+        return;
+      }
+      throw new Error('Expected this import to fail.');
+    };
+
+    await test('workspace: failed cell import keeps the dataset, and a new file detaches demo metadata', async () => {
+      await w.loadBuiltInSample();
+      const chip = w.activeChipState();
+      const first = chip.wells.cellWellIdx[0];
+      w.applyWellAssignments(chip, [first], chip.rois[0].id);
+      E('S.group = "demo_regions"');
+      const before = w.buildCellSegmentationCsvParts().parts.join('');
+      await w.loadCellSource('cell_id,x,y\nc1,broken,1\nc2,broken,2', { fileName: 'bad.csv' });
+      check(w.activeChipState() === chip, 'Bad X/Y replaced the active chip.');
+      check(E('S.meta.fileName') === 'sample_metadata.json' && E('S.group') === 'demo_regions', 'Bad X/Y reset metadata.');
+      check(w.buildCellSegmentationCsvParts().parts.join('') === before, 'Bad X/Y changed the export.');
+      check(!E('S.busy') && w.document.getElementById('progressWrap').hidden, 'Import progress did not reset.');
+
+      await w.loadCellSource('cell_id,x,y\nc1,1,2\nc2,8,9', { fileName: 'new.csv' });
+      const next = w.activeChipState();
+      check(E('S.data.fileName') === 'new.csv' && E('S.meta.fileName') === '', 'New file retained demo metadata.');
+      check(next.wells.mode === 'derived' && next.rois.length === 1 && next.rois[0].name === 'ROI 1', 'Demo geometry or ROIs leaked.');
+      check(E('S.group') === 'tissue' && E('S.display.cellSize') === 3 &&
+        Object.keys(E('S.meta.colorsByCol')).length === 0, 'Demo defaults or colors leaked.');
+    });
+
+    await test('workspace: column remapping keeps equivalent assignments and never copies old well indices', () => {
+      w.applyLoadedDataset(w.parseTableSync('cell_id,x,y,offset,same,well_id\nc1,1,2,101,1,A\nc2,9,4,109,9,B'));
+      const before = w.activeChipState();
+      const painted = before.wells.cellWellIdx[0];
+      w.applyWellAssignments(before, [painted], before.rois[0].id);
+      selectColumn('colX', 'y');
+      check(w.activeChipState() === before && w.document.getElementById('colX').value === '1', 'Invalid X/Y mapping was committed.');
+
+      selectColumn('colX', 'same');
+      check(labelAt(w.activeChipState(), 0) === 'ROI 1', 'Equivalent X mapping lost a label.');
+      selectColumn('colX', 'offset');
+      const after = w.activeChipState();
+      check(after.wells.count === before.wells.count && after.wellRoi.every(id => id === 0), 'Labels moved to different wells by index.');
+      check(w.document.getElementById('toast').textContent.includes('1 labeled wells'), 'The user was not told a label was dropped.');
+    });
+
+    await test('session: restores custom columns before matching wells and validates the whole import', async () => {
+      const table = 'cell_id,x,y,barcode_override,slide,wx,wy,well_override,rpos,cpos,feature\n' +
+        'a1,1,1,p1,P,10,10,W1,0,0,1\na2,9,1,p2,P,20,10,W2,0,1,2\n' +
+        'b1,1,9,q1,Q,10,10,W1,0,0,3\nb2,9,9,q2,Q,20,10,W2,0,1,4';
+      const loadTable = () => w.applyLoadedDataset(w.parseTableSync(table, { fileName: 'custom.csv' }));
+      loadTable();
+      for (const [id, header] of [
+        ['colX', 'wx'], ['colY', 'wy'], ['colCellId', 'barcode_override'], ['colChip', 'slide'],
+        ['colWellId', 'well_override'], ['colRow', 'rpos'], ['colCol', 'cpos'], ['colColor', 'feature'],
+      ]) selectColumn(id, header);
+      const chips = E('S.chipStates');
+      for (const [key, row] of [['P', 0], ['Q', 1]]) {
+        const chip = chips.get(key);
+        const roi = w.createRoi(chip, 'Saved ' + key, '#123456', false);
+        w.applyWellAssignments(chip, [chip.wells.cellWellIdx[row]], roi.id);
+      }
+      E('S.group = "saved"');
+      const session = JSON.parse(JSON.stringify(w.buildSessionSnapshot()));
+      loadTable();
+      const original = w.activeChipState();
+      const before = w.buildSessionSnapshot();
+      const invalid = JSON.parse(JSON.stringify(session));
+      invalid.chips.Q.rois.push({ name: 'saved q', color: '#888888', wells: [] });
+      await expectFailure(() => w.applySessionSnapshot(invalid), /already exists/i);
+      check(w.activeChipState() === original && E('S.group') === before.group &&
+        E('S.data.colMap.x') === 1 && E('S.chips.list').join() === 'default', 'Failed session changed the workspace.');
+
+      const result = w.applySessionSnapshot(session);
+      check(result.restoredWells === 2 && E('S.chips.list').join() === 'P,Q', 'Saved grouping was not restored.');
+      const columns = w.buildSessionSnapshot().columns;
+      check(Object.keys(session.columns).every(key => session.columns[key] === columns[key]), 'Saved columns were not restored.');
+      check(labelAt(chips.get('P'), 0) === 'Saved P' && labelAt(chips.get('Q'), 1) === 'Saved Q', 'Saved labels missed their wells.');
+    });
+
+    const loadDuplicateIds = () => {
+      const table = 'cell_id,x,y,well_id,x_roi\n' +
+        'D,10,0,W1,A\nA2,30,0,W2,A\nD,10,0,W1,B\nB2,30,0,W2,B';
+      w.applyLoadedDataset(w.parseTableSync(table));
+      selectColumn('colChip', 'x_roi');
+      return [E('S.chipStates.get("A")'), E('S.chipStates.get("B")')];
+    };
+
+    await test('labels: exported group collisions, chip-scoped IDs and literal NA round-trip', async () => {
+      const [a, b] = loadDuplicateIds();
+      const na = w.createRoi(a, 'NA', '#aabbcc', false);
+      const cortex = w.createRoi(b, 'Cortex', '#bbccdd', false);
+      for (const group of ['x', 'x_roi']) {
+        E('S.group = ' + JSON.stringify(group));
+        w.applyWellAssignments(a, [a.wells.cellWellIdx[0]], na.id);
+        w.applyWellAssignments(b, [b.wells.cellWellIdx[0]], cortex.id);
+        const exported = w.buildCellSegmentationCsvParts();
+        check(exported.headers.at(-1) === 'x_roi_roi' && new Set(exported.headers).size === exported.headers.length, 'Export emitted a duplicate header.');
+        w.clearChipSegmentation(a);
+        w.clearChipSegmentation(b);
+        const imported = await w.importSegmentationCsv(new w.Blob(exported.parts), exported.filename);
+        check(imported.groupName === group && imported.matchedCells === 4, 'Re-import used a structural column as the label.');
+        check(labelAt(a, 0) === 'NA' && labelAt(b, 0) === 'Cortex', 'Literal NA or a duplicate cell ID lost its label.');
+        check(w.buildCellSegmentationCsvParts().parts.join('') === exported.parts.join(''), 'CSV did not round-trip.');
+      }
+    });
+
+    await test('labels: case-insensitive partial imports touch only matched wells and are atomic', async () => {
+      const [a, b] = loadDuplicateIds();
+      const cortex = w.createRoi(a, 'Cortex', '#aabbcc', false);
+      const other = w.createRoi(b, 'Other', '#bbccdd', false);
+      w.applyWellAssignments(a, [a.wells.cellWellIdx[1]], cortex.id);
+      w.applyWellAssignments(b, [b.wells.cellWellIdx[0]], other.id);
+      const otherHistory = b.history;
+      const partial = await w.importSegmentationCsv('cell_id,x_roi,roi\nD,A,cortex');
+      check(partial.roisCreated === 0 && labelAt(a, 0) === 'Cortex', 'Mixed-case label failed to reuse the existing ROI.');
+      check(labelAt(a, 1) === 'Cortex' && labelAt(b, 0) === 'Other' && b.history === otherHistory, 'Partial CSV changed an unrelated well or chip.');
+      const before = w.buildCellSegmentationCsvParts().parts.join('');
+      const history = a.history;
+      await expectFailure(() => w.importSegmentationCsv('cell_id,roi\nA2,New\nD,New'), /ambiguous/i);
+      await expectFailure(() => w.importSegmentationCsv('cell_id,x_roi,roi\nA2,A,New\nD,B,"incomplete'), /unclosed/i);
+      check(w.buildCellSegmentationCsvParts().parts.join('') === before && a.history === history, 'Failed CSV changed labels or undo history.');
+      await w.importSegmentationCsv('cell_id,x_roi,roi\nD,A,');
+      check(labelAt(a, 0) === '' && labelAt(a, 1) === 'Cortex' && labelAt(b, 0) === 'Other', 'Blank label did not clear just its matched well.');
+      w.undoSeg(a);
+      check(labelAt(a, 0) === 'Cortex', 'Undo did not restore the imported well.');
+      await w.importSegmentationCsv('well_id,x_roi,roi\nW2,B,New');
+      check(labelAt(b, 1) === 'New' && labelAt(b, 0) === 'Other' && labelAt(a, 1) === 'Cortex', 'Well-ID import used the wrong chip.');
+    });
+
+    // ---- 5. 1,000,000-cell Performance Benchmark & Timing Budget ----
+    await test('perf: 1,000,000 cells parse, first draw, 5x5 brush stroke, flood fill, and CSV export within budget', async () => {
+      const N = 1000000;
+      const nSide = 50; // 50x50 = 2,500 wells (~400 cells/well, typical large spatial chip)
+      // Build 1M-row TSV in 20 chunks (fast string generation outside parse timer)
+      const chunks = ['cell_id\tx\ty\tid\tarr-row\tarr-col\tleiden\n'];
+      const batch = 25000;
+      const lines = new Array(batch);
+      for (let base = 0; base < N; base += batch) {
+        for (let i = 0; i < batch; i++) {
+          const idx = base + i;
+          const r = idx % nSide;
+          const c = ((idx / nSide) | 0) % nSide;
+          const wid = c * nSide + r;
+          const x = (c * 200 + 20 + ((idx * 37) % 160)).toFixed(1);
+          const y = (-r * 200 - 20 - ((idx * 53) % 160)).toFixed(1);
+          const cl = idx % 8;
+          lines[i] = `C${idx}\t${x}\t${y}\t${wid}\t${r}\t${c}\t${cl}`;
+        }
+        chunks.push(lines.join('\n') + '\n');
+      }
+      const blob = new w.Blob(chunks, { type: 'text/tab-separated-values' });
+      chunks.length = 0; // free generator arrays
+
+      // 1) Parse 1,000,000 rows
+      const tParse0 = performance.now();
+      const parsed = await w.parseTableAsync(blob, { fileName: 'bench_1m.tsv' });
+      const parseMs = performance.now() - tParse0;
+
+      // 2) First draw (build wells + spatial index + compute 1M colors + render WebGL/CPU + overlay + GPU finish)
+      const tDraw0 = performance.now();
+      w.applyLoadedDataset(parsed);
+      const gl = E('glState.gl');
+      if (gl) gl.finish();
+      const firstDrawMs = performance.now() - tDraw0;
+
+      const cs = w.activeChipState();
+      const r1 = cs.rois[0];
+      const r2 = w.createRoi(cs, 'BenchROI', '#ff7f0e', false);
+
+      // 3) 5x5 brush stroke across 18 wells + overlay redraw
+      const tBrush0 = performance.now();
+      const stroke = w.getStrokeWells(cs.wells, 200, -200, 3600, -3600, 5);
+      w.applyWellAssignments(cs, stroke, r1.id);
+      w.refresh('overlay', 'rois');
+      const brushMs = performance.now() - tBrush0;
+
+      // 4) Flood fill enclosed 8x8 empty area inside a closed 10x10 boundary (rows 30..39, cols 30..39)
+      const g2w = cs.wells.gridToWell;
+      const ring = [];
+      for (let i = 30; i <= 39; i++) {
+        ring.push(g2w[30 * nSide + i], g2w[39 * nSide + i], g2w[i * nSide + 30], g2w[i * nSide + 39]);
+      }
+      w.applyWellAssignments(cs, ring, r1.id);
+      cs.activeRoiId = r2.id;
+      const tFlood0 = performance.now();
+      const floodCount = w.runFloodAction(cs, g2w[34 * nSide + 34], 'flood_fill');
+      w.refresh('overlay', 'rois');
+      const floodMs = performance.now() - tFlood0;
+
+      // 5) Export 1,000,000 rows to RFC 4180 CSV Blob
+      const tExp0 = performance.now();
+      const exp = w.buildCellSegmentationCsvBlob();
+      const exportMs = performance.now() - tExp0;
+
+      window.__bench1M = {
+        cells: parsed.rowCount,
+        wells: cs.wells.count,
+        renderer: E('S.renderer'),
+        parseMs: Math.round(parseMs),
+        firstDrawMs: Math.round(firstDrawMs),
+        brushMs: Math.round(brushMs * 10) / 10,
+        floodMs: Math.round(floodMs * 10) / 10,
+        floodWells: floodCount,
+        exportMs: Math.round(exportMs),
+        exportBytes: exp.blob.size,
+      };
+
+      // Restore clean small sample so page memory drops immediately
+      await w.loadBuiltInSample();
+
+      return parsed.rowCount === N &&
+        floodCount === 64 &&
+        exp.blob.size > 20_000_000 &&
+        parseMs < 20000 &&
+        firstDrawMs < 5000 &&
+        brushMs < 250 &&
+        floodMs < 250 &&
+        exportMs < 20000;
+    });
+
+    // Render summary
+    const pass = results.filter(r => r[1]).length;
+    const fail = results.length - pass;
+    const bench = window.__bench1M
+      ? `\n1M benchmark (${window.__bench1M.renderer}): parse ${window.__bench1M.parseMs} ms | first draw ${window.__bench1M.firstDrawMs} ms | brush ${window.__bench1M.brushMs} ms | flood ${window.__bench1M.floodMs} ms (${window.__bench1M.floodWells} wells) | export ${window.__bench1M.exportMs} ms (${(window.__bench1M.exportBytes / 1048576).toFixed(1)} MB)`
+      : '';
+
+    const lines = [
+      `${pass} / ${results.length} passed${bench}`,
+      '',
+      ...results.map(([name, ok, err]) => `${ok ? 'PASS' : 'FAIL'} ${name}${err ? ' — ' + err : ''}`),
+    ];
+    out.innerHTML = lines.map(l => {
+      if (l.startsWith('PASS ')) return `<div class="ok">${l}</div>`;
+      if (l.startsWith('FAIL ')) return `<div class="bad">${l}</div>`;
+      return `<div>${l}</div>`;
+    }).join('');
+    document.title = fail === 0 ? 'PASS' : `FAIL (${fail})`;
+  }
+  </script>
+</body>
+</html>
