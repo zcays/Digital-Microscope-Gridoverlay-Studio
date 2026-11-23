@@ -8,12 +8,15 @@
  * History: drawGrid() used to clear its canvas first, which erased the image and exported only the grid — it no longer clears. */
 
 function buildExportCanvas({image = $('#exImg').checked, grid = $('#exGrid').checked, array = true} = {}) {
-  const r = array ? arrayCropRect() : null, c = document.createElement('canvas');
-  c.width = r ? r.w : S.doc.w; c.height = r ? r.h : S.doc.h;
-  const ctx = c.getContext('2d');
-  if (r) ctx.translate(-r.x, -r.y);                               // draw the whole canvas shifted; everything outside the array falls off the PNG
-  if (image && S.img.el) { renderImage({full: true}); ctx.drawImage(dom.gl, 0, 0, S.doc.w, S.doc.h); }
-  if (grid) drawGrid(ctx, S.doc.w, S.doc.h, 1);
+  const r = array ? arrayCropRect() : null, full = document.createElement('canvas');
+  full.width = S.doc.w; full.height = S.doc.h;
+  const fCtx = full.getContext('2d');
+  if (image && S.img.el) { renderImage({full: true}); fCtx.drawImage(dom.gl, 0, 0, S.doc.w, S.doc.h); }
+  if (grid) drawGrid(fCtx, S.doc.w, S.doc.h, 1);
+  if (!r) return full;
+  const c = document.createElement('canvas');
+  c.width = r.w; c.height = r.h;
+  c.getContext('2d').drawImage(full, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
   return c;
 }
 /** File name of the export: says which chip and that it is the array only, so the files are not mixed up. */
