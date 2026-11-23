@@ -1153,13 +1153,19 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
 
     const stageBox = await segFrame.locator('#stage').boundingBox();
     assert.ok(stageBox && stageBox.width > 200 && stageBox.height > 200, 'Segment stage must have non-zero size');
-    const midX = stageBox.x + stageBox.width * 0.5;
-    const midY = stageBox.y + stageBox.height * 0.5;
+    const segWellScreenPos = async (row, col) => segPageFrame().evaluate(([r, c]) => {
+      const cs = activeChipState();
+      const idx = cs.wells.gridToWell[r * cs.wells.nCols + c];
+      const pt = dataToScreen(cs.wells.cx[idx], cs.wells.cy[idx]);
+      return { x: pt.x, y: pt.y };
+    }, [row, col]);
 
-    // Single click + drag paint with 3x3 brush
-    await page.mouse.move(midX, midY);
+    // Single click + drag paint across center wells with 3x3 brush
+    const paintStart = await segWellScreenPos(10, 9);
+    const paintEnd = await segWellScreenPos(10, 11);
+    await page.mouse.move(stageBox.x + paintStart.x, stageBox.y + paintStart.y);
     await page.mouse.down();
-    await page.mouse.move(midX + 40, midY, { steps: 4 });
+    await page.mouse.move(stageBox.x + paintEnd.x, stageBox.y + paintEnd.y, { steps: 4 });
     await page.mouse.up();
     await page.waitForTimeout(150);
 
@@ -1174,7 +1180,8 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     // Flood fill corner region with Cortex, verify auto-reset returns tool to 'fill', then Undo & Redo
     await segFrame.locator('.roi-item', { hasText: 'Cortex' }).click();
     await segFrame.locator('#tools .tool[data-tool="flood_fill"]').click();
-    await page.mouse.click(stageBox.x + stageBox.width * 0.25, stageBox.y + stageBox.height * 0.25);
+    const floodPt = await segWellScreenPos(2, 2);
+    await page.mouse.click(stageBox.x + floodPt.x, stageBox.y + floodPt.y);
     await page.waitForTimeout(150);
     const afterFlood = await segPageFrame().evaluate(() => {
       const cs = activeChipState();

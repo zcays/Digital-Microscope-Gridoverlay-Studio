@@ -57,7 +57,7 @@ The E2E harness now checks error arrays again after teardown. Connection resets/
 
 ## Release `v1.1.0` (2026-11-22)
 
-First release under the **SUGAR (Super Ultra Gridding Arrays Repo)** brand and icon. Integrates the offline JavaScript **Segment** spatial ROI tool (`segment/`), bundles Grid Studio `15f4e34` (Pick 4 corners, automatic Crop to array with selectable margin, per-axis polarity Auto-fit for bent/oblique-lit chips, shared warp math, full undo restore, and refreshed dark cyan UI), and refactors Fluorescence Lab grid geometry and Electron shell setup.
+First release under the **SUGAR (Super Ultra Gridding Arrays Repo)** brand and icon. Integrates the offline JavaScript **Segment** spatial ROI tool (`segment/`), bundles Grid Studio `590ada2` (Pick 4 corners, automatic Crop to array with selectable margin and bit-exact CPU/GPU array export, per-axis polarity Auto-fit for bent/oblique-lit chips, shared warp math, full undo restore, and refreshed dark cyan UI), and refactors Fluorescence Lab grid geometry and Electron shell setup.
 
 Local Apple Silicon (`arm64`) verification prior to CI release build:
 - Source Grid Studio self-tests: **197 / 197 PASS** (including both local private real-photo checks, zero page errors).
