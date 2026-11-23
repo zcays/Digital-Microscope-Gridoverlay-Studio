@@ -69,6 +69,26 @@ frame.onload = () => setTimeout(async () => {
     E('dragTypes.warpEdge.move')(d, {}, {x: 600, y: 80});
     const ok = near(E('S.warp.c.nw.y'), 80 / E('S.doc.h'), 1e-9) && near(E('S.warp.c.ne.y'), 80 / E('S.doc.h'), 1e-9); E('resetWarp()'); E("setTool('move')"); return ok;
   });
+  test('warp: Auto-fit and renderers agree on all eight handles and the fine mesh', () => E(`(() => {
+    const before = {...S.warp};
+    try {
+      Object.assign(S.warp, {
+        c: {nw: {x: .02, y: .03}, ne: {x: .97, y: -.01}, se: {x: .92, y: .96}, sw: {x: -.03, y: .98}},
+        dev: {n: {x: .01, y: -.02}, e: {x: -.03, y: .05}, s: {x: .02, y: .04}, w: {x: -.01, y: -.04}},
+        mesh: {n: 17, d: Array.from({length: 578}, (_, k) => .003 * Math.sin(k * .37))},
+      });
+      const geo = {w: S.img.w, h: S.img.h, cx: S.lens.cx, cy: S.lens.cy,
+        docW: S.doc.w, docH: S.doc.h, mesh: S.warp.mesh};
+      const forward = afForward(afCurrent(), geo), points = warpControlPoints(), out = [];
+      return [[0, 0], [170, 120], [600, 390], [810, 710], [1200, 800], [1280, -40]].every(([x, y]) => {
+        forward(x, y, out);
+        const p = warpPoint(out[2], out[3], points);
+        return Math.hypot(p.x * geo.docW - out[0], p.y * geo.docH - out[1]) < 1e-8;
+      });
+    } finally {
+      Object.assign(S.warp, before);
+    }
+  })()`));
 
   // ---- keyboard ----
   const key = (k, o = {}) => w.document.body.dispatchEvent(new w.KeyboardEvent('keydown', {key: k, bubbles: true, cancelable: true, ...o}));

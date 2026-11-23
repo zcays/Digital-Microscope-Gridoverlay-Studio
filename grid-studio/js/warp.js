@@ -8,26 +8,46 @@
  * On top of the handles there can be a FINE MESH (S.warp.mesh, 17 × 17 nodes of small offsets) that follows local deviations the
  * 8 handles cannot. It has no handles of its own: Auto-fit / Auto-fix distortion (autofit.js) compute it, Reset distortion clears it.
  * Points are in canvas-normalised coordinates (0..1, y down). The warp is a biquadratic patch over
- * a 3 × 3 control grid, so with untouched handles it is exactly the identity. */
+ * a 3 × 3 control grid, so with untouched handles it is exactly the identity. The renderers and Auto-fit share the patch maths. */
 
 const SIDE_ENDS = {n: ['nw', 'ne'], e: ['ne', 'se'], s: ['se', 'sw'], w: ['sw', 'nw']};
 const CORNERS = ['nw', 'ne', 'se', 'sw'], SIDES = ['n', 'e', 's', 'w'];
 
 const midpoint = (a, b) => ({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2});
-const sidePoint = k => { const m = midpoint(S.warp.c[SIDE_ENDS[k][0]], S.warp.c[SIDE_ENDS[k][1]]), d = S.warp.dev[k]; return {x: m.x + d.x, y: m.y + d.y}; };
+function sidePoint(k, {c, dev} = S.warp) {
+  const [a, b] = SIDE_ENDS[k], m = midpoint(c[a], c[b]), d = dev[k];
+  return {x: m.x + d.x, y: m.y + d.y};
+}
 
 /** 3 × 3 control points, [row (top→bottom)][col (left→right)]. */
-function warpControlPoints() {
-  const {c, dev} = S.warp;
+function warpControlPoints(warp = S.warp) {
+  const {c, dev} = warp;
   const avg = {x: (c.nw.x + c.ne.x + c.se.x + c.sw.x) / 4, y: (c.nw.y + c.ne.y + c.se.y + c.sw.y) / 4};
   const centre = {                                         // follows the average of the edge bows
     x: avg.x + (dev.n.x + dev.e.x + dev.s.x + dev.w.x) / 2,
     y: avg.y + (dev.n.y + dev.e.y + dev.s.y + dev.w.y) / 2,
   };
-  return [[c.nw, sidePoint('n'), c.ne], [sidePoint('w'), centre, sidePoint('e')], [c.sw, sidePoint('s'), c.se]];
+  return [
+    [c.nw, sidePoint('n', warp), c.ne],
+    [sidePoint('w', warp), centre, sidePoint('e', warp)],
+    [c.sw, sidePoint('s', warp), c.se],
+  ];
 }
 
-const lagrange = t => [2 * (t - .5) * (t - 1), -4 * t * (t - 1), 2 * t * (t - .5)];   // quadratic basis at t = 0, .5, 1
+/** Evaluate the handle patch with the quadratic basis at 0, .5 and 1. Auto-fit reuses out for each sample. */
+function warpPatchPoint(u, v, points, out = {x: 0, y: 0}) {
+  const a0 = 2 * (u - .5) * (u - 1), a1 = -4 * u * (u - 1), a2 = 2 * u * (u - .5);
+  const b0 = 2 * (v - .5) * (v - 1), b1 = -4 * v * (v - 1), b2 = 2 * v * (v - .5);
+  const top = points[0], middle = points[1], bottom = points[2];
+  out.x = b0 * (a0 * top[0].x + a1 * top[1].x + a2 * top[2].x) +
+          b1 * (a0 * middle[0].x + a1 * middle[1].x + a2 * middle[2].x) +
+          b2 * (a0 * bottom[0].x + a1 * bottom[1].x + a2 * bottom[2].x);
+  out.y = b0 * (a0 * top[0].y + a1 * top[1].y + a2 * top[2].y) +
+          b1 * (a0 * middle[0].y + a1 * middle[1].y + a2 * middle[2].y) +
+          b2 * (a0 * bottom[0].y + a1 * bottom[1].y + a2 * bottom[2].y);
+  return out;
+}
+
 /** Fine-mesh offset at canvas-normalised (u, v): bilinear between the n×n nodes of mesh = {n, d}. Pure (no app state). */
 function warpMeshOffset(mesh, u, v) {
   const n = mesh.n, d = mesh.d, fu = (u < 0 ? 0 : u > 1 ? 1 : u) * (n - 1), fv = (v < 0 ? 0 : v > 1 ? 1 : v) * (n - 1);
@@ -37,10 +57,12 @@ function warpMeshOffset(mesh, u, v) {
 }
 /** Where the pass-1 picture point (u, v) is drawn: the 8-handle patch plus the fine mesh (if any). Both renderers and the overlay use this. */
 function warpPoint(u, v, P = warpControlPoints()) {
-  const lu = lagrange(u), lv = lagrange(v); let x = 0, y = 0;
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { const w = lv[j] * lu[i]; x += w * P[j][i].x; y += w * P[j][i].y; }
-  if (S.warp.mesh) { const o = warpMeshOffset(S.warp.mesh, u, v); x += o.x; y += o.y; }
-  return {x, y};
+  const p = warpPatchPoint(u, v, P);
+  if (S.warp.mesh) {
+    const o = warpMeshOffset(S.warp.mesh, u, v);
+    p.x += o.x; p.y += o.y;
+  }
+  return p;
 }
 
 function warpActive() {

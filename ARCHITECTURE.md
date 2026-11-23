@@ -31,7 +31,7 @@ Check it: open `grid-studio/tests.html` (should say **PASS**).
 | `presets.js` | µm→px scale of the ticked chip (`pxPerUm`), image calibration (`umPerPx`), tick / fit / dead room (`selectChip`, `setChipFit`, `setChipMargin`), chip info box | change how a chip sizes the canvas |
 | `chiplist.js` | The live chip list `CHIPS`: validation (`validateChips`), JSON/CSV import (`parseChipFile`), `setChipList`, the remembered list, start-up from `chips.js` | change what a chip file may contain |
 | `actions.js` | Small named commands (reset, centre, fit, toggle grid, nudge) | add a one-line command reused by buttons + keys |
-| `warp.js` | Distort tool: control-point maths, mesh generation, on-canvas handles, its drag types | change how distortion works |
+| `warp.js` | Distort tool: shared patch and fine-mesh maths, render vertices, on-canvas handles, drag types | change how distortion works |
 | `gl.js` | WebGL (GPU): shaders, two-pass render (`renderGL`), texture upload | add an image effect, change the lens model |
 | `cpu.js` | Software renderer (Canvas 2-D): same picture as `gl.js`, used when WebGL is unavailable | mirror any change made in `gl.js` |
 | `render.js` | Chooses GPU or software: `initRenderer`, `renderImage`, `enterCpuMode`, `maxTextureSize`, `setRendererImage` | change the fallback rules |
@@ -86,12 +86,13 @@ fresh `<canvas>` (a canvas that had a WebGL context cannot give a 2-D one) and u
 `GPU` or `software`; `index.html?renderer=cpu` forces software. `cpu.js` is a JS twin of the shader (per-pixel lens + bilinear,
 transformed `drawImage` when there is no lens, triangle mesh for the distortion) and draws heavy interactive frames at ~1 MP, then a
 full-quality frame ~250 ms later; export always uses full quality. **Any change to the image maths in `gl.js` must be repeated in
-`cpu.js`** — `tests.html` renders six cases with both and requires them to match.
+`cpu.js`** — `tests.html` renders the same cases with both and compares the pixels.
 
 **Image pipeline (gl.js).** Pass 1 (fragment shader, inverse mapping): translate/scale/rotate then radial lens
 correction `r' = r(1 − k1 r² − k2 r⁴)`. Pass 2 (only if the distortion is not identity): the pass-1 result is drawn on a
 32×32 mesh whose vertices come from `warpPoint()` = a biquadratic patch over 3×3 control points (the 8 handles) plus the optional fine
-mesh `S.warp.mesh` (`warp.js`). The fine mesh has 16 cells per side on purpose: its nodes coincide with vertices of both render meshes
+mesh `S.warp.mesh` (`warp.js`). Auto-fit uses the same `warpControlPoints()`, `warpPatchPoint()` and `warpMeshOffset()` as the renderers.
+The fine mesh has 16 cells per side on purpose: its nodes coincide with vertices of both render meshes
 (32 GPU, 16 software), so the two renderers agree. Premultiplied alpha.
 
 **Crop only affects the image.** `S.img.crop` is an *oriented* rectangle in image pixels, `{x, y, w, h, rot}` (null = uncropped;
@@ -139,7 +140,7 @@ position and lens are frozen; the wall numbering is taken from where the user pu
 indices must be close to a whole number), the handles and a first mesh are fitted from the absolute indices (so a bulge larger than half
 a well is still recovered), then the mod-1 mesh passes polish. Afterwards the array edges are checked: if the image sits a whole well
 off, it refuses instead of locking the picture one column out.
-`afForward()` is a third copy of the image maths (source px → canvas px, i.e. the INVERSE direction of the shader, plus the warp).
+`afForward()` maps source px → canvas px (the inverse direction of the shader) and uses the shared distortion maths in `warp.js`.
 `AF.debug` holds the last run's internals. Works on the raw source pixels, so it ignores the current image settings except the lens centre.
 
 **Registries instead of a big switch.** A tool = an entry in `TOOLS` (`cursor`, optional `enter`, `pick(e,p)` → drag name).
@@ -168,8 +169,8 @@ Alt ×0.1, with `stopPropagation`). Otherwise `keyboard.js` nudges the image. Es
 * **Browsers cache the `.js/.css` files while you develop** (a normal reload may serve old code). Hard refresh (⌘⇧R)
   or open DevTools → Network → "Disable cache".
 * **Comment terminators:** a stray missing `*/` in a file header silently comments out the whole file.
-* **Three copies of the image maths:** `gl.js` (shader), `cpu.js` (software) and `afForward()` in `autofit.js`. Change one → change all;
-  `tests.html` compares GPU vs software and checks auto-fit results in the rendered picture.
+* **Lens and image-transform maths must agree** across `gl.js` (shader), `cpu.js` (software) and `afForward()` in `autofit.js`.
+  The distortion patch and fine mesh live in `warp.js`. `tests.html` compares GPU vs software and checks auto-fit results in the rendered picture.
 * `grid-studio/samples/` is git-ignored (the user's own photos). The real-photo auto-fit test skips itself when the file is missing.
 * **Don't call `renderGL()` directly** (it only exists on the GPU path) — use `renderImage()`. `dom.gl` is *replaced* by a new element in
   software mode, so never cache a reference to it across frames.
