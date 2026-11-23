@@ -68,6 +68,14 @@ Local Apple Silicon (`arm64`) verification prior to CI release build:
 - Packaged ARM64 desktop E2E (`tests/desktop.cjs --packaged`): **10 / 10 groups PASS** (embedded Grid Studio 197/197, embedded Segment 21/21 + 4 geometry regressions + 1M-cell WebGL benchmark, 3-tool iframe persistence, backend fault isolation & recovery, zero unexpected errors, zero orphan backend processes).
 - Packaging integrity: `codesign --verify --deep --strict`, `hdiutil verify`, `unzip -tq`, zero `samples/` entries in ASAR/ZIP, and byte-exact ASAR source parity verified.
 
+GitHub Actions run [45092398213](https://github.com/zcays/sugar/actions/runs/45092398213), source commit `ade714d22828f062af31d50c395e31b4592b8986`, completed successfully on all three platforms:
+
+- Apple Silicon (`macos-15`, arm64): Python 9/9, Segment parser 5/5, backend lifecycle PASS, packaged desktop 10/10 groups, Grid Studio 197/197, Segment 21/21 + 4 geometry regressions + 1M-cell WebGL benchmark (parse 1311 ms, first draw 172 ms, brush 1.0 ms, flood 0.7 ms, export 456 ms).
+- Intel Mac (`macos-15-intel`, x64): Python 9/9, Segment parser 5/5, backend lifecycle PASS, packaged desktop 10/10 groups, Grid Studio 189/189 (software fallback on headless runner), Segment 21/21 + 4 geometry regressions + 1M-cell CPU benchmark (parse 1392 ms, first draw 240 ms, brush 1.1 ms, flood 0.8 ms, export 636 ms).
+- Windows (`windows-2025`, x64): Python 9/9, Segment parser 5/5, backend lifecycle PASS, packaged desktop 9/9 groups (Unix orphan-process check skipped on Windows), Grid Studio 197/197, Segment 21/21 + 4 geometry regressions + 1M-cell WebGL benchmark (parse 1009 ms, first draw 183 ms, brush 1.2 ms, flood 0.7 ms, export 653 ms).
+
+All packaged reports contain zero unexpected page, console, or HTTP 500 errors. The `v1.1.0` GitHub Release includes the six CI-built installers/portable archives, `SUGAR-1.1.0-source.zip`, and `SHA256SUMS.txt`.
+
 ## Release `v1.0.3` (2026-11-15)
 
 Adds portable Grid Studio alignment settings save/load (including the ⌘/Ctrl+S shortcut and workspace JSON drop) and top-bar image filename display. Source, app version, lockfile, installation instructions and installer filenames are updated together. The prior local-only 1.0.2 settings build is superseded by this distinct release version. Keep the original image and custom chip lists separately from settings files.
