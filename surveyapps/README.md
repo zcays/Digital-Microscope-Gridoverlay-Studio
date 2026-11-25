@@ -29,8 +29,6 @@ All three tools run completely offline on your computer with a bundled Electron 
 
 ## Screenshots
 
-Screenshots show SUGAR 1.1.0, before the workspace names changed.
-
 | Dashboard | Chocolate Bar |
 |---|---|
 | ![SUGAR Dashboard](docs/images/dashboard.png) | ![Chocolate Bar Workspace](docs/images/grid-studio.png) |
