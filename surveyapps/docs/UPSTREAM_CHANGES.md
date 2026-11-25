@@ -1,6 +1,6 @@
 # Source preservation and integration changes
 
-`vendor/provenance.json` records pinned commits. `vendor/grid-studio/` matches the public files at Grid Studio commit `590ada2746dc95cb73ee0214d3c42d5784351c20`, including corner-assisted alignment, crop to array (with bit-exact full-canvas slicing), per-axis polarity Auto-fit, shared warp evaluation, full undo restoration, and the refreshed interface. `vendor/microscopy/` preserves the original scientific Python sources. No user photos, unrelated essay, machine configuration or git metadata are included.
+`vendor/provenance.json` records pinned commits. `vendor/grid-studio/` is based on the public files at Grid Studio commit `590ada2746dc95cb73ee0214d3c42d5784351c20`, including corner-assisted alignment, crop to array (with bit-exact full-canvas slicing), per-axis polarity Auto-fit, shared warp evaluation, full undo restoration, and the refreshed interface. SUGAR 1.1.1 applies the Chocolate Bar name to the vendored page title and toolbar. `vendor/microscopy/` preserves the original scientific Python sources. No user photos, unrelated essay, machine configuration or git metadata are included.
 
 The runtime copy `backend/microscopy_app.py` retains upstream algorithms and callbacks. Targeted changes:
 
@@ -18,14 +18,14 @@ Scientific limits retained: images convert to RGB 8-bit; multi-page TIFF uses th
 
 Neither repository snapshot contains a LICENSE. Confirm public redistribution rights before distributing outside the authorized local project. Dependencies retain their own licenses in the bundled runtimes and source lockfiles.
 
-Grid Studio: SurveyApps used to carry one small patch to `autofit.js` (a start-spread guard for distortion-only fitting). Upstream now has its own safeguards for that case and its self-tests pass unmodified, so the patch was dropped and the vendored copy equals upstream.
+Grid Studio: SurveyApps used to carry one small patch to `autofit.js` (a start-spread guard for distortion-only fitting). Upstream now has its own safeguards for that case and its self-tests pass unmodified, so the Auto-fit patch was dropped.
 
 Plotly compatibility: change deprecated heatmap axis `titlefont` to `title.font`. Plotly 7 otherwise raised a callback error after fluorescence computation.
 
-The App B runtime diff is included as `vendor/app-b-surveyapps.patch`, with the original file retained alongside. App A needs no patch (see above). No original repo working-tree file is edited by SurveyApps build or test commands.
+The App B runtime diff is included as `vendor/app-b-surveyapps.patch`, with the original file retained alongside. `scripts/sync_grid_studio.py` applies the Chocolate Bar name when it vendors App A. No original repo working-tree file is edited by SurveyApps build or test commands.
 
 ## Grid Studio settings integration (1.0.3)
-Grid Studio includes portable alignment settings save/load (`grid-studio/js/settings.js`, **Save settings…** / **Load settings…**, workspace `.json` drop, `⌘/Ctrl+S` shortcut) and top-bar loaded image filename display (`#imgName`). The public snapshot is pinned in `vendor/provenance.json`; it has no uncommitted source changes. In the parent Studio checkout, run `python3 surveyapps/scripts/sync_grid_studio.py` to sync and byte-verify the public allowlist; samples are never traversed. The standalone SurveyApps repository already contains this snapshot. `desktop/protocol.cjs` owns protocol resource handling; `main.cjs` retains session security and lifecycle. `desktop/**` and `vendor/grid-studio/**` package the new scripts; samples are explicitly excluded. Local builds use `dist-local`.
+Grid Studio 1.0.3 integration added portable alignment settings save/load (`grid-studio/js/settings.js`, **Save settings…** / **Load settings…**, workspace `.json` drop, `⌘/Ctrl+S` shortcut) and top-bar loaded image filename display (`#imgName`). The current source revision and synchronization process are documented in [Architecture](ARCHITECTURE.md). `desktop/protocol.cjs` owns protocol resource handling. Local builds use `dist-local`.
 
 Startup uses an empty Lab work surface with an Upload image prompt. Image operations and measurements require an upload; no demonstration pixels are measured. Grid Studio starts empty with a translucent dark overlay (`#hint`) dimming the stage grid so the drop/open prompt is legible until a valid image or sample is loaded. The optional Grid Studio sample uses grayscale pixels. Uploaded image colors are preserved.
 

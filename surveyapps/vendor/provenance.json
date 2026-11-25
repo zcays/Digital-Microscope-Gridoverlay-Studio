@@ -2,7 +2,7 @@
   "appA": {
     "url": "https://github.com/zcays/Digital-Microscope-Gridoverlay-Studio",
     "commit": "590ada2746dc95cb73ee0214d3c42d5784351c20",
-    "note": "Exact public Grid Studio files synced at this commit with scripts/sync_grid_studio.py. Private samples are excluded."
+    "note": "Public Grid Studio files synced with scripts/sync_grid_studio.py. The vendored index.html uses the Chocolate Bar title and toolbar label. Private samples are excluded."
   },
   "appB": {
     "url": "https://github.com/zcays/Microscopy-Grid-Overlay",

@@ -7,6 +7,7 @@
 (function () {
   'use strict';
 
+  var FALLBACK_VERSION = '1.1.1';
   var VALID_VIEWS = ['home', 'grid', 'microscopy', 'segment', 'help'];
   var staticTools = {
     grid: { statusKey: 'gridUrl', fallbackUrl: '../vendor/grid-studio/index.html' },
@@ -19,15 +20,15 @@
       subtitle: 'Microfluidic chip alignment, fluorescence analysis, and spatial ROI segmentation'
     },
     grid: {
-      title: 'Grid Studio',
+      title: 'Chocolate Bar',
       subtitle: 'Optical calibration and true-to-scale microfluidic chip overlay'
     },
     microscopy: {
-      title: 'Fluorescence Lab',
+      title: 'Gummy Bears',
       subtitle: 'Well grid alignment, 8-bit channel intensity, and heatmap analysis'
     },
     segment: {
-      title: 'Segment',
+      title: 'Sugar Pebbles',
       subtitle: 'Interactive spatial ROI painting, flood fill, and million-cell CSV export'
     },
     help: {
@@ -173,12 +174,12 @@
 
     var version = typeof safe.version === 'string' && safe.version.trim()
       ? safe.version.trim()
-      : '1.1.0';
+      : FALLBACK_VERSION;
 
     var defaultMessages = {
-      starting: 'Starting Fluorescence Lab… Grid Studio and Segment are ready.',
+      starting: 'Starting Gummy Bears… Chocolate Bar and Sugar Pebbles are ready.',
       ready: 'All three tools are ready. Your data stays on this computer.',
-      error: 'Fluorescence Lab could not start. Grid Studio and Segment remain available.'
+      error: 'Gummy Bears could not start. Chocolate Bar and Sugar Pebbles remain available.'
     };
 
     var message = typeof safe.message === 'string' && safe.message.trim()
@@ -240,11 +241,11 @@
       cardBadgeClass = 'badge badge-ready';
       rtStateText = 'Ready';
     } else if (next.state === 'error') {
-      pillLabel = 'Fluorescence Lab Error';
-      sidebarTitle = 'Fluorescence Lab Error';
+      pillLabel = 'Gummy Bears Error';
+      sidebarTitle = 'Gummy Bears Error';
       cardBadgeText = 'Unavailable';
       cardBadgeClass = 'badge badge-error';
-      rtStateText = 'Unavailable (Grid Studio & Segment ready)';
+      rtStateText = 'Unavailable (Chocolate Bar & Sugar Pebbles ready)';
     }
 
     if (dom.pillText) dom.pillText.textContent = pillLabel;
@@ -254,7 +255,7 @@
     if (dom.heroStatusSummary) {
       dom.heroStatusSummary.textContent = next.state === 'ready'
         ? 'All Tools Ready'
-        : (next.state === 'error' ? 'Grid Studio & Segment Ready • Fluorescence Lab Unavailable' : 'Starting Fluorescence Lab…');
+        : (next.state === 'error' ? 'Chocolate Bar & Sugar Pebbles Ready • Gummy Bears Unavailable' : 'Starting Gummy Bears…');
     }
 
     if (dom.cardGridBadge) {
@@ -327,11 +328,11 @@
       toggleHidden(dom.microscopySpinner, true);
       toggleHidden(dom.microscopyErrorIcon, false);
       if (dom.microscopyOverlayTitle) {
-        dom.microscopyOverlayTitle.textContent = 'Desktop App Required for Fluorescence Lab';
+        dom.microscopyOverlayTitle.textContent = 'Desktop App Required for Gummy Bears';
       }
       if (dom.microscopyOverlayMsg) {
         dom.microscopyOverlayMsg.textContent =
-          'Launch the SUGAR desktop application to use Fluorescence Lab, or open Grid Studio.';
+          'Launch the SUGAR desktop application to use Gummy Bears, or open Chocolate Bar.';
       }
       return;
     }
@@ -342,8 +343,8 @@
       toggleHidden(dom.microscopyErrorIcon, true);
       if (dom.microscopyOverlayTitle) {
         dom.microscopyOverlayTitle.textContent = appState.retrying
-          ? 'Restarting Fluorescence Lab…'
-          : 'Starting Fluorescence Lab…';
+          ? 'Restarting Gummy Bears…'
+          : 'Starting Gummy Bears…';
       }
       if (dom.microscopyOverlayMsg) {
         dom.microscopyOverlayMsg.textContent = st.message;
@@ -356,11 +357,11 @@
       toggleHidden(dom.microscopySpinner, true);
       toggleHidden(dom.microscopyErrorIcon, false);
       if (dom.microscopyOverlayTitle) {
-        dom.microscopyOverlayTitle.textContent = 'Fluorescence Lab Unavailable';
+        dom.microscopyOverlayTitle.textContent = 'Gummy Bears Unavailable';
       }
       if (dom.microscopyOverlayMsg) {
         dom.microscopyOverlayMsg.textContent =
-          st.message || 'Fluorescence Lab could not start. Retry below or continue working in Grid Studio.';
+          st.message || 'Gummy Bears could not start. Retry below or continue working in Chocolate Bar.';
       }
       return;
     }
@@ -372,7 +373,7 @@
         toggleHidden(dom.microscopySpinner, false);
         toggleHidden(dom.microscopyErrorIcon, true);
         if (dom.microscopyOverlayTitle) {
-          dom.microscopyOverlayTitle.textContent = 'Opening Fluorescence Lab…';
+          dom.microscopyOverlayTitle.textContent = 'Opening Gummy Bears…';
         }
         if (dom.microscopyOverlayMsg) {
           dom.microscopyOverlayMsg.textContent = 'Loading well intensity and heatmap workspace…';
@@ -524,7 +525,7 @@
     // Optimistically reflect starting state while retryBackend executes
     applyStatus({
       state: 'starting',
-      message: 'Restarting Fluorescence Lab…',
+      message: 'Restarting Gummy Bears…',
       gridUrl: appState.status.gridUrl,
       segmentUrl: appState.status.segmentUrl,
       version: appState.status.version
@@ -540,7 +541,7 @@
       finishRetry();
       applyStatus({
         state: 'error',
-        message: err && err.message ? err.message : 'Fluorescence Lab retry failed.',
+        message: err && err.message ? err.message : 'Gummy Bears retry failed.',
         gridUrl: appState.status.gridUrl,
         segmentUrl: appState.status.segmentUrl,
         version: appState.status.version
@@ -585,13 +586,13 @@
     appState.hasBridge = validBridge;
 
     if (!validBridge) {
-      // Desktop-only fallback mode: no console error, clear banner + Grid Studio fallback
+      // Desktop-only fallback mode: no console error, clear banner + Chocolate Bar fallback
       toggleHidden(dom.fallbackBanner, false);
       applyStatus({
         state: 'error',
-        message: 'Launch the SUGAR desktop application to use Fluorescence Lab.',
+        message: 'Launch the SUGAR desktop application to use Gummy Bears.',
         gridUrl: staticTools.grid.fallbackUrl,
-        version: '1.0.0'
+        version: FALLBACK_VERSION
       });
       return;
     }
@@ -628,7 +629,7 @@
           state: 'error',
           message: msg,
           gridUrl: appState.status.gridUrl || staticTools.grid.fallbackUrl,
-          version: appState.status.version || '1.1.0'
+          version: appState.status.version || FALLBACK_VERSION
         });
       }
     );

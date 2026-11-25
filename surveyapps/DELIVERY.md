@@ -1,13 +1,17 @@
-# SUGAR 1.1.0
+# SUGAR 1.1.1
 
-Download the installer for macOS or Windows from [GitHub Releases (`v1.1.0`)](https://github.com/zcays/sugar/releases/tag/v1.1.0) (or build from source locally). No Python, Node, browser, or terminal setup is needed. All three tools — **Grid Studio**, **Fluorescence Lab**, and **Segment** — work completely offline.
+Build the installer from source locally or check [GitHub Releases](https://github.com/zcays/sugar/releases/tag/v1.1.1) for published macOS and Windows installers. No Python, Node, browser, or terminal setup is needed. All three tools — **Chocolate Bar**, **Gummy Bears**, and **Sugar Pebbles** — work completely offline.
 
-- **macOS (Apple Silicon):** `SUGAR-1.1.0-mac-arm64.dmg` · `SUGAR-1.1.0-mac-arm64.zip`
-- **macOS (Intel x64):** `SUGAR-1.1.0-mac-x64.dmg` · `SUGAR-1.1.0-mac-x64.zip`
-- **Windows (64-bit x64):** `SUGAR-1.1.0-win-x64.exe` (NSIS installer) · `SUGAR-1.1.0-win-x64.zip` (portable archive)
-- **Source & Checksums:** `SUGAR-1.1.0-source.zip` · [build/use instructions](README.md) · [install guide](INSTALL.md) · `SHA256SUMS.txt`
+- **macOS (Apple Silicon):** `SUGAR-1.1.1-mac-arm64.dmg` · `SUGAR-1.1.1-mac-arm64.zip`
+- **macOS (Intel x64):** `SUGAR-1.1.1-mac-x64.dmg` · `SUGAR-1.1.1-mac-x64.zip`
+- **Windows (64-bit x64):** `SUGAR-1.1.1-win-x64.exe` (NSIS installer) · `SUGAR-1.1.1-win-x64.zip` (portable archive)
+- **Source & Checksums:** `SUGAR-1.1.1-source.zip` · [build/use instructions](README.md) · [install guide](INSTALL.md) · `SHA256SUMS.txt`
 - **Artwork:** [2048px PNG](assets/icon-2048.png) · [SVG master](assets/icon.svg) · [macOS ICNS](assets/icon.icns) · [Windows ICO](assets/icon.ico)
 - **Evidence:** [validation record](docs/VALIDATION.md) · [source changes](docs/UPSTREAM_CHANGES.md)
+
+Version **1.1.1** introduces the Chocolate Bar, Gummy Bears, and Sugar Pebbles workspace names.
+
+## SUGAR 1.1.0 release record
 
 Version **1.1.0** is the first release shipped under the **SUGAR (Super Ultra Gridding Arrays Repo)** brand and icon, adding the **Segment** spatial ROI segmentation tool alongside updated **Grid Studio** and **Fluorescence Lab** workspaces:
 

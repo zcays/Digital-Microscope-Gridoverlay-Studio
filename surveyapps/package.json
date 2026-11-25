@@ -1,7 +1,7 @@
 {
   "name": "surveyapps",
   "productName": "SUGAR",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "SUGAR (Super Ultra Gridding Arrays Repo) — offline microfluidic chip alignment, fluorescence analysis, and spatial ROI segmentation",
   "author": "zcays",

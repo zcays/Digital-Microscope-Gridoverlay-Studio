@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Segment Self-tests</title>
+  <title>Sugar Pebbles Self-tests</title>
   <style>
     body { font: 13px/1.5 ui-monospace, Menlo, monospace; background: #0c1014; color: #d6e2ec; padding: 16px; }
     .ok { color: #63db8c; }
@@ -12,7 +12,7 @@
   </style>
 </head>
 <body>
-  <h1>SUGAR Segment — Self-tests</h1>
+  <h1>Sugar Pebbles — Self-tests</h1>
   <div id="out">running…</div>
   <iframe id="app" src="index.html"></iframe>
   <iframe id="cpuApp" src="index.html?renderer=cpu"></iframe>
@@ -375,7 +375,7 @@
         sum.startsWith('chip,roi,color,cell_count,well_count\n');
     });
 
-    // ---- Segment workspace and import regressions ----
+    // ---- Sugar Pebbles workspace and import regressions ----
     const check = (condition, message) => { if (!condition) throw new Error(message); };
     const selectColumn = (id, header) => {
       const select = w.document.getElementById(id);

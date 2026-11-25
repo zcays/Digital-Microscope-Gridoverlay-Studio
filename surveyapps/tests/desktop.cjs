@@ -1304,7 +1304,7 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
     assert.ok(killedPid, 'Backend process must be identified for the recovery test');
     if (killedPid) {
       await page.waitForFunction(
-        () => document.getElementById('pill-text')?.innerText === 'Fluorescence Lab Error',
+        () => document.getElementById('pill-text')?.innerText === 'Gummy Bears Error',
         null,
         { timeout: 15000 }
       );
@@ -1330,8 +1330,9 @@ async function triggerAndAwaitDownload(electronApp, downloadDir, actionFn, custo
       assert.equal(recoveredStatus.state, 'ready');
       // A healthy server can announce ready before the restarted Dash frame is loaded.
       await page.locator('[data-nav=microscopy]').click();
-      await page.frameLocator('#frame-microscopy').locator('#btn-compute-fluor').waitFor({state:'visible',timeout:30000});
-      await page.frameLocator('#frame-microscopy').locator('#image-graph .js-plotly-plot').waitFor({state:'visible',timeout:30000});
+      const recoveredLab = page.frameLocator('#frame-microscopy');
+      await recoveredLab.getByText('Upload image to begin', {exact: true}).waitFor({timeout: 30000});
+      await recoveredLab.locator('#image-graph .js-plotly-plot').waitFor({state:'visible',timeout:30000});
       let recoveredBackendPid = null;
       try {
         if (process.platform !== 'win32') {

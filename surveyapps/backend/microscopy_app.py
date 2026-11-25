@@ -16,7 +16,7 @@ import json
 import string
 
 from pathlib import Path
-app = dash.Dash(__name__, title="SUGAR · Fluorescence Lab",
+app = dash.Dash(__name__, title="SUGAR · Gummy Bears",
                 assets_folder=str(Path(__file__).parent / 'assets'),
                 serve_locally=True, update_title="Processing…")
 
@@ -139,7 +139,7 @@ app.layout = html.Div([
     # Left Control Panel
     html.Div([
         html.Div('RGB channel intensity • 8-bit (0–255). Upload your own image; Upload an image to begin. Recompute after alignment changes.', className='survey-note'),
-        html.H2("Fluorescence Lab", className='lab-heading', style={
+        html.H2("Gummy Bears", className='lab-heading', style={
             'color': 'var(--lg-text)', 'margin': '0 0 12px 0',
             'fontFamily': 'inherit', 'fontSize': '17px', 'fontWeight': '600',
             'letterSpacing': '-0.02em'

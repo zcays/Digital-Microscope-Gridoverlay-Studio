@@ -10,13 +10,13 @@ class Backend extends EventEmitter {
     super();
     this.root = root; this.resources = resources; this.packaged = packaged;
     this.child = null; this.origin = null; this.token = null;
-    this.status = {state:'starting', message:'Starting Fluorescence Lab…'};
+    this.status = {state:'starting', message:'Starting Gummy Bears…'};
   }
   update(status) { this.status = status; this.emit('status', status); }
   start() {
     this.stop();
     this.token = randomBytes(32).toString('hex');
-    this.update({state:'starting', message:'Starting Fluorescence Lab… Grid Studio is ready.'});
+    this.update({state:'starting', message:'Starting Gummy Bears… Chocolate Bar and Sugar Pebbles are ready.'});
     const executable = process.platform === 'win32' ? 'surveyapps-backend.exe' : 'surveyapps-backend';
     const command = path.join(this.packaged ? this.resources : path.join(this.root,'build'), 'backend', ...(this.packaged ? [] : ['surveyapps-backend']), executable);
     const env = {...process.env, PYTHONUNBUFFERED:'1', PYTHONDONTWRITEBYTECODE:'1'};
@@ -29,7 +29,7 @@ class Backend extends EventEmitter {
       this.stop();
       this.update({state:'error', message});
     };
-    const timer = setTimeout(() => failure('Fluorescence Lab took too long to start. Retry, or reopen SUGAR.'), 60000);
+    const timer = setTimeout(() => failure('Gummy Bears took too long to start. Retry, or reopen SUGAR.'), 60000);
     this.timer = timer;
     child.on('error', error => failure('The bundled analysis engine could not start (' + error.code + '). Reinstall the complete application and retry.'));
     child.stderr.on('data', chunk => { diagnostic = (diagnostic + chunk.toString()).slice(-5000); });
@@ -59,7 +59,7 @@ class Backend extends EventEmitter {
       if (this.child !== child) return;
       // Diagnostics are local developer console only; no user image data is logged.
       if (diagnostic) console.error('Analysis engine:', diagnostic);
-      failure('Fluorescence Lab stopped unexpectedly ('+(signal || code)+'). Grid Studio is still available. Retry to start a new analysis session.');
+      failure('Gummy Bears stopped unexpectedly ('+(signal || code)+'). Chocolate Bar and Sugar Pebbles are still available. Retry to start a new analysis session.');
     });
     child.stdin.write(JSON.stringify({token:this.token})+'\n');
   }

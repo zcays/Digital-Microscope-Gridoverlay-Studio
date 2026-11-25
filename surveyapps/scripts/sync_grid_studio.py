@@ -16,6 +16,9 @@ for name in allowed:
             if 'samples' in relative.parts:
                 raise RuntimeError('Private samples forbidden')
             files[relative] = item.read_bytes()
+# Apply the SUGAR workspace name to the vendored page title and toolbar.
+index = Path('index.html')
+files[index] = files[index].replace(b'Digital Microscope Gridoverlay Studio', b'Chocolate Bar')
 # Validate the allowlist before replacing the vendor snapshot.
 for item in target.rglob('*'):
     if item.is_file() and item.relative_to(target) not in files:

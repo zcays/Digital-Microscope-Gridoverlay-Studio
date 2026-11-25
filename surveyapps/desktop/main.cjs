@@ -69,7 +69,7 @@ function installMenu() {
     {label:'File',submenu:[{label:'Home',accelerator:'CmdOrCtrl+1',click:()=>window.webContents.executeJavaScript("document.querySelector('[data-nav=home]').click()")},{type:'separator'},process.platform==='darwin'?{role:'close'}:{role:'quit'}]},
     {role:'editMenu'},
     {label:'View',submenu:[{role:'reload'},{role:'forceReload'},{type:'separator'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{type:'separator'},{role:'togglefullscreen'}]},
-    {label:'Help',submenu:[{label:'Help & Reference',click:()=>window.webContents.executeJavaScript("document.querySelector('[data-nav=help]').click()")},{label:'About SUGAR',click:()=>dialog.showMessageBox(window,{type:'info',title:'SUGAR',message:'SUGAR '+app.getVersion(),detail:'Super Ultra Gridding Arrays Repo\n\nOffline Grid Studio, Fluorescence Lab, and Segment. Data remains on this computer. This local build is not Developer ID signed or notarized.'})}]}
+    {label:'Help',submenu:[{label:'Help & Reference',click:()=>window.webContents.executeJavaScript("document.querySelector('[data-nav=help]').click()")},{label:'About SUGAR',click:()=>dialog.showMessageBox(window,{type:'info',title:'SUGAR',message:'SUGAR '+app.getVersion(),detail:'Super Ultra Gridding Arrays Repo\n\nOffline Chocolate Bar, Gummy Bears, and Sugar Pebbles. Data remains on this computer. This local build is not Developer ID signed or notarized.'})}]}
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
 }

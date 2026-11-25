@@ -342,7 +342,7 @@ function createImportedRoi(chip, name, color) {
 /** Restore a previously saved Session JSON onto the currently loaded dataset. */
 function applySessionSnapshot(obj) {
   if (!obj || typeof obj !== 'object' || obj.kind !== 'sugar-segment-session') {
-    throw new Error('This file is not a SUGAR Segment session JSON.');
+    throw new Error('This file is not a Sugar Pebbles session JSON.');
   }
   if (obj.version !== 1) throw new Error(`Unsupported session version: ${obj.version}`);
   if (S.data.rowCount === 0) throw new Error('Load the cell file first, then load the session JSON.');
